@@ -1,0 +1,1166 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Panel Gastos Logísticos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<!-- ▼ CDN oficial de Supabase (JS v2) -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- ▼ SheetJS para leer archivos Excel (.xlsx / .xls) -->
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #F7F6F2;
+    --surface: #FFFFFF;
+    --border: #E5E3DD;
+    --border-strong: #C8C5BC;
+    --text: #1A1917;
+    --text-muted: #6B6860;
+    --text-faint: #9E9B94;
+    --flex:  #1D9E75;
+    --me1:   #185FA5;
+    --icbc:  #BA7517;
+    --trans: #7F77DD;
+    --corp:  #D85A30;
+    --radius: 10px;
+    --radius-sm: 6px;
+  }
+  body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; padding: clamp(1rem, 3vw, 2.5rem) clamp(1rem, 4vw, 2.5rem) 4rem; max-width: 1500px; margin: 0 auto; -webkit-text-size-adjust: 100%; }
+  header { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.75rem; }
+  header h1 { font-size: clamp(19px, 4vw, 24px); font-weight: 600; letter-spacing: -0.02em; }
+  header p { font-size: 13px; color: var(--text-muted); margin-top: 3px; }
+  .controls { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 1.5rem; align-items: center; }
+  .controls select, .controls input[type="month"] { font-family: 'DM Sans', sans-serif; font-size: 13px; padding: 7px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); cursor: pointer; }
+  .btn { font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500; padding: 7px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); cursor: pointer; display: flex; align-items: center; gap: 6px; transition: background 0.15s; }
+  .btn:hover { background: var(--bg); }
+  .btn-primary { background: var(--text); color: var(--surface); border-color: var(--text); }
+  .btn-primary:hover { background: #333; }
+  .btn-danger { color: #cc3333; border-color: #cc3333; }
+  .btn-danger:hover { background: #fff5f5; }
+  .metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 1.5rem; }
+  .metric { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
+  .metric-label { font-size: 11px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; }
+  .metric-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 5px; vertical-align: 1px; }
+  .metric-value { font-size: 20px; font-weight: 600; letter-spacing: -0.02em; }
+  .metric-sub { font-size: 11px; color: var(--text-faint); margin-top: 3px; }
+  .charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 1.5rem; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; }
+  .card.full { grid-column: 1 / -1; }
+  .card-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-muted); margin-bottom: 14px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; }
+  .legend-item { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text-muted); }
+  .legend-sq { width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint); padding: 8px 10px; border-bottom: 1px solid var(--border); text-align: left; }
+  tbody tr { transition: background 0.1s; }
+  tbody tr:hover { background: var(--bg); }
+  td { padding: 10px 10px; border-bottom: 1px solid var(--border); vertical-align: middle; color: var(--text); }
+  tbody tr:last-child td { border-bottom: none; }
+  .badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 500; padding: 3px 8px; border-radius: 4px; white-space: nowrap; }
+  .tag-total { display: inline-block; font-size: 11px; font-weight: 500; background: var(--bg); color: var(--text-muted); padding: 3px 8px; border-radius: 4px; border: 1px solid var(--border); }
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 200; align-items: center; justify-content: center; }
+  .modal-overlay.open { display: flex; }
+  .modal { background: var(--surface); border-radius: var(--radius); border: 1px solid var(--border); padding: 1.5rem; width: 400px; max-width: 95vw; box-shadow: 0 8px 40px rgba(0,0,0,0.12); }
+  .modal h3 { font-size: 16px; font-weight: 600; margin-bottom: 16px; }
+  .form-row { margin-bottom: 12px; }
+  .form-row label { display: block; font-size: 12px; font-weight: 500; color: var(--text-muted); margin-bottom: 5px; }
+  .form-row input, .form-row select { font-family: 'DM Sans', sans-serif; width: 100%; font-size: 13px; padding: 8px 11px; border-radius: var(--radius-sm); border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); }
+  .form-row input:focus, .form-row select:focus { outline: 2px solid var(--trans); outline-offset: 1px; }
+  .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+  .empty { text-align: center; padding: 2rem; color: var(--text-faint); font-size: 13px; }
+  .resumen-anual { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; margin-bottom: 1.5rem; }
+  .mes-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; }
+  .mes-item { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 12px; cursor: pointer; transition: border-color 0.15s, background 0.15s; }
+  .mes-item:hover { border-color: var(--border-strong); background: var(--bg); }
+  .mes-item.activo { border-color: #7F77DD; background: #EEEDFE; }
+  .mes-item-nombre { font-size: 12px; font-weight: 500; color: var(--text-muted); margin-bottom: 4px; }
+  .mes-item-total { font-size: 14px; font-weight: 600; font-family: 'DM Mono', monospace; }
+  .mes-item-count { font-size: 10px; color: var(--text-faint); margin-top: 2px; }
+  /* ▼ Zona de carga masiva (drag & drop) */
+  .dropzone { border: 2px dashed var(--border-strong); border-radius: var(--radius); padding: 28px 18px; text-align: center; color: var(--text-muted); font-size: 13px; cursor: pointer; transition: border-color 0.15s, background 0.15s; }
+  .dropzone.drag { border-color: var(--trans); background: #EEEDFE; color: var(--text); }
+  .dropzone strong { color: var(--text); }
+  .bulk-status { font-size: 12px; margin-top: 12px; color: var(--text-muted); white-space: pre-line; max-height: 160px; overflow-y: auto; }
+  .bulk-status.error { color: #cc3333; }
+  .bulk-status.ok { color: #1D9E75; }
+  /* ▼ Aviso de configuración faltante */
+  .config-warn { background: #FAECE7; border: 1px solid #D85A30; color: #712B13; border-radius: var(--radius); padding: 14px 18px; margin-bottom: 1.5rem; font-size: 13px; line-height: 1.5; display: none; }
+  .config-warn code { font-family: 'DM Mono', monospace; background: rgba(0,0,0,0.06); padding: 1px 5px; border-radius: 4px; }
+  /* ============ RESPONSIVE ============ */
+
+  /* Tablets y pantallas medianas: la comparativa pasa a ancho completo y los gráficos se apilan si hace falta */
+  @media (max-width: 900px) {
+    .charts-grid { grid-template-columns: 1fr; }
+  }
+
+  /* Tablets verticales / móviles grandes */
+  @media (max-width: 680px) {
+    header { flex-direction: column; align-items: stretch; }
+    header > div:last-child { display: grid !important; grid-template-columns: 1fr 1fr; gap: 8px; }
+    header > div:last-child .btn { justify-content: center; }
+    header > div:last-child .btn:last-child { grid-column: 1 / -1; }
+    .controls { gap: 8px; }
+    .controls select, .controls input[type="month"] { flex: 1 1 140px; }
+    .metric-grid { grid-template-columns: repeat(2, 1fr); }
+    /* Toques táctiles más cómodos */
+    .btn { padding: 10px 14px; }
+    .controls select, .controls input[type="month"] { padding: 10px 12px; }
+    .mes-grid { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); }
+    /* Tabla más compacta */
+    thead th, td { padding: 8px 7px; }
+    table { font-size: 12px; }
+  }
+
+  /* Móviles chicos */
+  @media (max-width: 420px) {
+    .metric-grid { grid-template-columns: 1fr; }
+    header > div:last-child { grid-template-columns: 1fr; }
+    header > div:last-child .btn:last-child { grid-column: auto; }
+    .modal { padding: 1.1rem; }
+    /* La columna "Mes" es redundante en pantallas muy chicas */
+    thead th:nth-child(2), td:nth-child(2) { display: none; }
+  }
+
+  /* Pantallas táctiles: agranda el área de los botones de acción de la tabla */
+  @media (hover: none) and (pointer: coarse) {
+    .btn-danger { min-width: 34px; min-height: 30px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Panel Gastos Logísticos</h1>
+    <p>Gastos operativos y logísticos — sincronizado con Supabase</p>
+  </div>
+  <div style="display:flex; gap:8px; flex-wrap:wrap;">
+    <button class="btn" onclick="abrirExport()">⬇ Exportar Excel</button>
+    <button class="btn" onclick="abrirBulk()">📥 Carga masiva</button>
+    <button class="btn btn-primary" onclick="abrirModal()">+ Agregar gasto</button>
+  </div>
+</header>
+
+<div class="config-warn" id="configWarn">
+  ⚠️ <strong>Falta configurar Supabase.</strong> Abrí este archivo y completá las constantes
+  <code>SUPABASE_URL</code> y <code>SUPABASE_ANON_KEY</code> al principio del bloque
+  <code>&lt;script&gt;</code> (las encontrás en tu proyecto → <em>Settings → API</em>).
+</div>
+
+<div class="controls">
+  <input type="month" id="filtroMes" value="">
+  <select id="filtroCategoria">
+    <option value="all">Todas las categorías</option>
+    <option value="flex">Envíos Flex ML</option>
+    <option value="me1">ME1 Mercado Libre</option>
+    <option value="icbc">Tienda ICBC</option>
+    <option value="fravega">Tienda Frávega</option>
+    <option value="megatone">Tienda Megatone</option>
+    <option value="oncity">Tienda OnCity</option>
+    <option value="trans">Transferencias (Spot)</option>
+    <option value="corp">Envíos Corporativos</option>
+    <option value="reprove">Retiro Proveedores</option>
+    <option value="distrib">Distribución</option>
+  </select>
+  <button class="btn btn-danger" onclick="limpiarFiltros()">✕ Limpiar</button>
+</div>
+
+<div class="metric-grid" id="metricas"></div>
+
+<div class="resumen-anual">
+  <div class="card-title">resumen por mes</div>
+  <div class="mes-grid" id="mesGrid"></div>
+</div>
+
+<div class="charts-grid">
+  <div class="card">
+    <div class="card-title">distribución por categoría</div>
+    <div class="legend" id="legendDonut"></div>
+    <div style="position:relative; width:100%; height:240px;"><canvas id="donutChart"></canvas></div>
+  </div>
+  <div class="card">
+    <div class="card-title">evolución mensual</div>
+    <div class="legend" id="legendLine"></div>
+    <div style="position:relative; width:100%; height:240px;"><canvas id="lineChart"></canvas></div>
+  </div>
+  <div class="card full">
+    <div class="card-title">comparativa por categoría — período seleccionado</div>
+    <div style="position:relative; width:100%; height:180px;"><canvas id="barChart"></canvas></div>
+  </div>
+</div>
+
+<div class="card">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:8px;">
+    <div class="card-title" style="margin-bottom:0;">detalle de gastos</div>
+    <span class="tag-total" id="countLabel"></span>
+  </div>
+  <div style="overflow-x:auto;">
+    <table>
+      <thead>
+        <tr>
+          <th style="width:12%">Fecha</th>
+          <th style="width:10%">Mes</th>
+          <th style="width:24%">Categoría</th>
+          <th style="width:30%">Descripción</th>
+          <th style="width:16%; text-align:right">Monto</th>
+          <th style="width:8%; text-align:center">—</th>
+        </tr>
+      </thead>
+      <tbody id="tablaBody"></tbody>
+    </table>
+  </div>
+  <div id="tablaEmpty" class="empty" style="display:none;">No hay gastos para el período seleccionado.</div>
+</div>
+
+<!-- Modal: nuevo gasto -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <h3>Nuevo gasto</h3>
+    <div class="form-row"><label>Fecha</label><input type="date" id="fFecha"></div>
+    <div class="form-row">
+      <label>Categoría</label>
+      <select id="fCategoria">
+        <option value="flex">Envíos Flex ML</option>
+        <option value="me1">ME1 Mercado Libre</option>
+        <option value="icbc">Tienda ICBC</option>
+        <option value="fravega">Tienda Frávega</option>
+        <option value="megatone">Tienda Megatone</option>
+        <option value="oncity">Tienda OnCity</option>
+        <option value="trans">Transferencias (Spot)</option>
+        <option value="corp">Envíos Corporativos</option>
+        <option value="reprove">Retiro Proveedores</option>
+        <option value="distrib">Distribución</option>
+      </select>
+    </div>
+    <div class="form-row"><label>Descripción</label><input type="text" id="fDesc" placeholder="Ej: Flete zona norte"></div>
+    <div class="form-row"><label>Monto ($)</label><input type="number" id="fMonto" placeholder="0" min="0" step="1"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="cerrarModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="agregarGasto()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: carga masiva CSV / Excel -->
+<div class="modal-overlay" id="modalBulk">
+  <div class="modal" style="width:460px;">
+    <h3>Carga masiva (CSV / Excel)</h3>
+    <div class="form-row" style="margin-bottom:14px;">
+      <label>Sector / formato del archivo</label>
+      <select id="bulkPerfil"></select>
+    </div>
+    <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px;line-height:1.5;" id="bulkAyuda"></p>
+    <div class="dropzone" id="dropzone">
+      Arrastrá tu archivo <strong>.csv</strong>, <strong>.xlsx</strong> o <strong>.xls</strong> acá<br>o hacé clic para seleccionarlo
+      <input type="file" id="csvInput" accept=".csv,text/csv,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" style="display:none;">
+    </div>
+    <div class="bulk-status" id="bulkStatus"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="cerrarBulk()">Cerrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: exportar a Excel -->
+<div class="modal-overlay" id="modalExport">
+  <div class="modal">
+    <h3>Exportar a Excel</h3>
+    <div class="form-row">
+      <label>Categoría</label>
+      <select id="expCategoria"></select>
+    </div>
+    <div style="display:flex; gap:10px;">
+      <div class="form-row" style="flex:1;"><label>Desde</label><input type="date" id="expDesde"></div>
+      <div class="form-row" style="flex:1;"><label>Hasta</label><input type="date" id="expHasta"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="cerrarExport()">Cancelar</button>
+      <button class="btn btn-primary" onclick="exportarExcel()">⬇ Exportar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   CONFIGURACIÓN DE SUPABASE  ←  COMPLETÁ ESTOS DOS VALORES
+   (los encontrás en tu proyecto: Settings → API)
+   ============================================================ */
+const SUPABASE_URL      = 'https://ranofexflfdzdibbeihq.supabase.co';   // ej: https://abcdxyz.supabase.co
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJhbm9mZXhmbGZkemRpYmJlaWhxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1NzQ5MDYsImV4cCI6MjA5NjE1MDkwNn0.61g7Us9mTChOF8FxPtrdJA7UDvsPauJoB3HJyRdIgyY';                       // la clave pública "anon / public"
+const TABLA = 'gastos';
+const TABLA_ENVIOS = 'envios';   // tabla auxiliar para dedup por envío (ID Cardinal)
+/* ============================================================ */
+
+// Crea el cliente de Supabase (el CDN expone window.supabase)
+const configurado = !SUPABASE_URL.includes('TU-PROYECTO') && !SUPABASE_ANON_KEY.includes('TU-ANON-KEY');
+const sb = configurado ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
+
+const CATEGORIAS = {
+  flex:     { label: 'Envíos Flex ML',      color: '#1D9E75', bg: '#E1F5EE', txt: '#085041' },
+  me1:      { label: 'ME1 Mercado Libre',   color: '#185FA5', bg: '#E6F1FB', txt: '#0C447C' },
+  icbc:     { label: 'Tienda ICBC',         color: '#BA7517', bg: '#FAEEDA', txt: '#633806' },
+  fravega:  { label: 'Tienda Frávega',      color: '#C2185B', bg: '#FCE4EC', txt: '#880E4F' },
+  megatone: { label: 'Tienda Megatone',     color: '#0097A7', bg: '#E0F7FA', txt: '#006064' },
+  oncity:   { label: 'Tienda OnCity',       color: '#F9A825', bg: '#FFF8E1', txt: '#855B00' },
+  trans:    { label: 'Transferencias (Spot)', color: '#7F77DD', bg: '#EEEDFE', txt: '#3C3489' },
+  corp:     { label: 'Envíos Corporativos', color: '#D85A30', bg: '#FAECE7', txt: '#712B13' },
+  reprove:  { label: 'Retiro Proveedores',  color: '#6D4C41', bg: '#EFEBE9', txt: '#3E2723' },
+  distrib:  { label: 'Distribución',        color: '#455A64', bg: '#ECEFF1', txt: '#263238' }
+};
+// Categoría de respaldo para valores no reconocidos (evita que la app se rompa)
+const CAT_FALLBACK = { label: 'Otros', color: '#9E9B94', bg: '#EFEEEA', txt: '#3A3833' };
+function getCat(k) { return CATEGORIAS[k] || CAT_FALLBACK; }
+
+// Mapa inverso etiqueta -> clave, para interpretar categorías escritas en el CSV
+const LABEL_TO_KEY = {};
+Object.keys(CATEGORIAS).forEach(k => { LABEL_TO_KEY[CATEGORIAS[k].label.toLowerCase()] = k; });
+function normalizeCat(v) {
+  if (!v) return 'corp';
+  const t = String(v).trim().toLowerCase();
+  if (CATEGORIAS[t]) return t;                 // ya es una clave (flex, me1, ...)
+  if (LABEL_TO_KEY[t]) return LABEL_TO_KEY[t];  // coincide con una etiqueta exacta
+  for (const k in CATEGORIAS) {                 // coincidencia parcial
+    if (CATEGORIAS[k].label.toLowerCase().includes(t) || t.includes(k)) return k;
+  }
+  return 'corp';
+}
+
+const MESES_NOMBRE = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+
+let gastos = [];
+let donutChart, lineChart, barChart;
+
+/* ============================================================
+   CAPA DE DATOS  ·  SUPABASE
+   Tabla "gastos": id, fecha, categoria, descripcion, monto, fecha_creacion
+   En memoria usamos { id, fecha, cat, desc, monto } (mapeo de columnas).
+   ============================================================ */
+function fromRow(r) {
+  return { id: r.id, fecha: r.fecha, cat: normalizeCat(r.categoria), desc: r.descripcion || '', monto: Number(r.monto) || 0 };
+}
+function toRow(g) {
+  return { fecha: g.fecha, categoria: g.cat, descripcion: g.desc, monto: g.monto };
+}
+
+async function cargarGastos() {
+  if (!sb) { document.getElementById('configWarn').style.display = 'block'; return []; }
+  const { data, error } = await sb.from(TABLA).select('*').order('fecha', { ascending: false });
+  if (error) { console.error(error); alert('Error al cargar gastos desde Supabase:\n' + error.message); return []; }
+  return (data || []).map(fromRow);
+}
+
+function fmt(n) { return '$' + Number(n || 0).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function fmtK(n) { return n >= 1000 ? '$' + (n/1000).toFixed(0) + 'k' : '$' + Math.round(n); }
+// Cantidad de envíos/viajes de un registro (la guardamos en la descripción: "… — N envíos/viajes")
+function nEnvios(g) { const m = /—\s*([\d.]+)\s*(?:env[ií]os?|viajes?)/i.exec(g.desc || ''); return m ? parseInt(m[1].replace(/\./g, ''), 10) || 0 : 0; }
+
+function limpiarFiltros() {
+  document.getElementById('filtroMes').value = '';
+  document.getElementById('filtroCategoria').value = 'all';
+  render();
+}
+
+function getFiltered() {
+  const mes = document.getElementById('filtroMes').value;
+  const cat = document.getElementById('filtroCategoria').value;
+  return gastos.filter(g => (!mes || g.fecha.startsWith(mes)) && (cat === 'all' || g.cat === cat));
+}
+
+function getMesesConGastos() {
+  const set = new Set(gastos.map(g => g.fecha.substring(0,7)));
+  return Array.from(set).sort().reverse();
+}
+
+function render() {
+  const filtrados = getFiltered();
+  const totalFiltrado = filtrados.reduce((s,g) => s+g.monto, 0);
+  const totalesCat = {}; const enviosCat = {};
+  Object.keys(CATEGORIAS).forEach(k => { totalesCat[k] = 0; enviosCat[k] = 0; });
+  filtrados.forEach(g => { totalesCat[g.cat] = (totalesCat[g.cat]||0) + g.monto; enviosCat[g.cat] = (enviosCat[g.cat]||0) + nEnvios(g); });
+  const totalEnvios = Object.values(enviosCat).reduce((s,v)=>s+v,0);
+
+  // Métricas (muestra el gasto y, si corresponde, la cantidad de envíos por categoría)
+  const activosCat = Object.keys(CATEGORIAS).filter(k => totalesCat[k] > 0 || enviosCat[k] > 0);
+  document.getElementById('metricas').innerHTML = `
+    <div class="metric">
+      <div class="metric-label">Total del período</div>
+      <div class="metric-value">${fmt(totalFiltrado)}</div>
+      <div class="metric-sub">${totalEnvios>0 ? totalEnvios.toLocaleString('es-AR')+' envíos · ' : ''}${filtrados.length} registros</div>
+    </div>
+    ${activosCat.map(k => `
+    <div class="metric">
+      <div class="metric-label"><span class="metric-dot" style="background:${getCat(k).color}"></span>${getCat(k).label}</div>
+      <div class="metric-value" style="font-size:17px;">${fmt(totalesCat[k])}</div>
+      <div class="metric-sub">${totalFiltrado>0?Math.round(totalesCat[k]/totalFiltrado*100):0}% del total${enviosCat[k]>0 ? ' · '+enviosCat[k].toLocaleString('es-AR')+' envíos' : ''}</div>
+    </div>`).join('')}
+  `;
+
+  // Resumen por mes (respeta el filtro de categoría; muestra todos los meses para navegar)
+  const catFiltro = document.getElementById('filtroCategoria').value;
+  const baseCat = catFiltro === 'all' ? gastos : gastos.filter(g => g.cat === catFiltro);
+  const meses = [...new Set(baseCat.map(g => g.fecha.substring(0,7)))].sort().reverse();
+  const mesActivo = document.getElementById('filtroMes').value;
+  const mesGrid = document.getElementById('mesGrid');
+  mesGrid.innerHTML = meses.length
+    ? meses.map(m => {
+        const delMes = baseCat.filter(g => g.fecha.startsWith(m));
+        const totalMes = delMes.reduce((s,g)=>s+g.monto,0);
+        const enviosMes = delMes.reduce((s,g)=>s+nEnvios(g),0);
+        const [anio, mm] = m.split('-');
+        return `<div class="mes-item ${mesActivo===m?'activo':''}" onclick="seleccionarMes('${m}')">
+          <div class="mes-item-nombre">${MESES_NOMBRE[parseInt(mm)-1].substring(0,3)} ${anio}</div>
+          <div class="mes-item-total">${fmtK(totalMes)}</div>
+          <div class="mes-item-count">${enviosMes>0 ? enviosMes.toLocaleString('es-AR')+' envíos' : delMes.length+' registros'}</div>
+        </div>`;
+      }).join('')
+    : '<div style="font-size:13px;color:var(--text-faint);padding:8px 0;">Sin gastos cargados.</div>';
+
+  renderDonut(totalesCat);
+  renderLine();
+  renderBar(totalesCat);
+  renderTabla(filtrados);
+}
+
+function seleccionarMes(m) {
+  document.getElementById('filtroMes').value = m;
+  render();
+}
+
+function renderDonut(totales) {
+  const cats = Object.keys(CATEGORIAS).filter(k => totales[k]>0);
+  if (!cats.length) { if(donutChart){donutChart.destroy();donutChart=null;} document.getElementById('legendDonut').innerHTML=''; return; }
+  document.getElementById('legendDonut').innerHTML = cats.map(k =>
+    `<span class="legend-item"><span class="legend-sq" style="background:${getCat(k).color}"></span>${getCat(k).label}</span>`
+  ).join('');
+  if (donutChart) donutChart.destroy();
+  donutChart = new Chart(document.getElementById('donutChart'), {
+    type: 'doughnut',
+    data: { labels: cats.map(k=>getCat(k).label), datasets: [{ data: cats.map(k=>totales[k]), backgroundColor: cats.map(k=>getCat(k).color), borderWidth: 3, borderColor: '#fff' }] },
+    options: { responsive:true, maintainAspectRatio:false, cutout:'68%', plugins: { legend:{display:false}, tooltip:{callbacks:{label:ctx=>` ${fmt(ctx.raw)} (${Math.round(ctx.raw/ctx.dataset.data.reduce((a,b)=>a+b,0)*100)}%)`}}}}
+  });
+}
+
+function renderLine() {
+  const meses = getMesesConGastos().reverse().slice(-8);
+  if (!meses.length) { if(lineChart){lineChart.destroy();lineChart=null;} document.getElementById('legendLine').innerHTML=''; return; }
+  const labels = meses.map(m => { const [,mm]=m.split('-'); return MESES_NOMBRE[parseInt(mm)-1].substring(0,3); });
+  document.getElementById('legendLine').innerHTML = Object.keys(CATEGORIAS).map(k =>
+    `<span class="legend-item"><span class="legend-sq" style="background:${getCat(k).color};border-radius:50%;width:8px;height:8px;"></span>${getCat(k).label}</span>`
+  ).join('');
+  if (lineChart) lineChart.destroy();
+  lineChart = new Chart(document.getElementById('lineChart'), {
+    type: 'line',
+    data: { labels, datasets: Object.keys(CATEGORIAS).map(k => ({ label:getCat(k).label, data:meses.map(m=>gastos.filter(g=>g.fecha.startsWith(m)&&g.cat===k).reduce((s,g)=>s+g.monto,0)), borderColor:getCat(k).color, tension:0.4, fill:false, borderWidth:2, pointRadius:3, pointBackgroundColor:getCat(k).color })) },
+    options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}, tooltip:{callbacks:{label:ctx=>` ${ctx.dataset.label}: ${fmt(ctx.raw)}`}}}, scales:{ y:{ticks:{callback:v=>fmtK(v),font:{size:11}},grid:{color:'rgba(128,128,128,0.08)'}}, x:{ticks:{font:{size:11}},grid:{display:false}} }}
+  });
+}
+
+function renderBar(totales) {
+  const cats = Object.keys(CATEGORIAS);
+  if (barChart) barChart.destroy();
+  barChart = new Chart(document.getElementById('barChart'), {
+    type: 'bar',
+    data: { labels: cats.map(k=>getCat(k).label), datasets: [{ data:cats.map(k=>totales[k]||0), backgroundColor:cats.map(k=>getCat(k).color), borderRadius:4, borderSkipped:false }] },
+    options: { responsive:true, maintainAspectRatio:false, indexAxis:'y', plugins:{legend:{display:false}, tooltip:{callbacks:{label:ctx=>` ${fmt(ctx.raw)}`}}}, scales:{ x:{ticks:{callback:v=>fmtK(v),font:{size:11}},grid:{color:'rgba(128,128,128,0.08)'}}, y:{ticks:{font:{size:12}},grid:{display:false}} }}
+  });
+}
+
+function renderTabla(lista) {
+  const sorted = [...lista].sort((a,b) => b.fecha.localeCompare(a.fecha));
+  document.getElementById('countLabel').textContent = sorted.length + ' registros';
+  const empty = document.getElementById('tablaEmpty');
+  if (!sorted.length) { document.getElementById('tablaBody').innerHTML=''; empty.style.display='block'; return; }
+  empty.style.display = 'none';
+  document.getElementById('tablaBody').innerHTML = sorted.map(g => {
+    const [anio, gm] = g.fecha.split('-');
+    return `<tr>
+      <td style="font-family:'DM Mono',monospace;font-size:12px;color:var(--text-muted)">${g.fecha}</td>
+      <td><span style="font-size:11px;color:var(--text-muted)">${MESES_NOMBRE[parseInt(gm)-1].substring(0,3)} ${anio}</span></td>
+      <td><span class="badge" style="background:${getCat(g.cat).bg};color:${getCat(g.cat).txt}">${getCat(g.cat).label}</span></td>
+      <td style="color:var(--text-muted)">${g.desc}</td>
+      <td style="text-align:right;font-weight:600;font-family:'DM Mono',monospace;font-size:13px;">${fmt(g.monto)}</td>
+      <td style="text-align:center;"><button class="btn btn-danger" style="padding:3px 8px;font-size:11px;" onclick="eliminarGasto(${g.id})">✕</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function abrirModal() {
+  document.getElementById('fFecha').value = new Date().toISOString().split('T')[0];
+  document.getElementById('fDesc').value = '';
+  document.getElementById('fMonto').value = '';
+  document.getElementById('modalOverlay').classList.add('open');
+  setTimeout(() => document.getElementById('fDesc').focus(), 100);
+}
+function cerrarModal() { document.getElementById('modalOverlay').classList.remove('open'); }
+
+async function agregarGasto() {
+  if (!sb) { alert('Configurá primero SUPABASE_URL y SUPABASE_ANON_KEY.'); return; }
+  const fecha = document.getElementById('fFecha').value;
+  const cat   = document.getElementById('fCategoria').value;
+  const desc  = document.getElementById('fDesc').value.trim() || 'Sin descripción';
+  const monto = parseFloat(document.getElementById('fMonto').value);
+  if (!fecha) { alert('Completá la fecha.'); return; }
+  if (!monto || monto <= 0) { alert('Ingresá un monto válido.'); return; }
+
+  const { data, error } = await sb.from(TABLA).insert(toRow({ fecha, cat, desc, monto })).select();
+  if (error) { console.error(error); alert('Error al guardar en Supabase:\n' + error.message); return; }
+  if (data && data[0]) gastos.push(fromRow(data[0]));
+  cerrarModal();
+  document.getElementById('filtroMes').value = fecha.substring(0,7);
+  render();
+}
+
+async function eliminarGasto(id) {
+  if (!sb) return;
+  if (!confirm('¿Eliminar este gasto?')) return;
+  const { error } = await sb.from(TABLA).delete().eq('id', id);
+  if (error) { console.error(error); alert('Error al eliminar en Supabase:\n' + error.message); return; }
+  gastos = gastos.filter(g => g.id !== id);
+  render();
+}
+
+// ---- Exportar a Excel (elige categoría + rango de fechas) ----
+function abrirExport() {
+  // Llena el menú de categorías (Todas + cada una)
+  const sel = document.getElementById('expCategoria');
+  sel.innerHTML = '<option value="all">Todas las categorías</option>' +
+    Object.keys(CATEGORIAS).map(k => `<option value="${k}">${CATEGORIAS[k].label}</option>`).join('');
+  // Prefija el rango con el mínimo y máximo de fechas cargadas
+  if (gastos.length) {
+    const fechas = gastos.map(g => g.fecha).sort();
+    document.getElementById('expDesde').value = fechas[0];
+    document.getElementById('expHasta').value = fechas[fechas.length - 1];
+  }
+  // Si hay filtros activos en el panel, los toma como punto de partida
+  const catActual = document.getElementById('filtroCategoria').value;
+  if (catActual && catActual !== 'all') sel.value = catActual;
+  const mesActual = document.getElementById('filtroMes').value;
+  if (mesActual) {
+    const [a, m] = mesActual.split('-');
+    document.getElementById('expDesde').value = `${mesActual}-01`;
+    const finMes = m === '12' ? `${parseInt(a)+1}-01-01` : `${a}-${String(parseInt(m)+1).padStart(2,'0')}-01`;
+    const d = new Date(finMes); d.setDate(d.getDate() - 1);
+    document.getElementById('expHasta').value = `${mesActual}-${String(d.getDate()).padStart(2,'0')}`;
+  }
+  document.getElementById('modalExport').classList.add('open');
+}
+function cerrarExport() { document.getElementById('modalExport').classList.remove('open'); }
+
+function exportarExcel() {
+  const cat = document.getElementById('expCategoria').value;
+  const desde = document.getElementById('expDesde').value;
+  const hasta = document.getElementById('expHasta').value;
+  const lista = gastos.filter(g =>
+    (cat === 'all' || g.cat === cat) &&
+    (!desde || g.fecha >= desde) &&
+    (!hasta || g.fecha <= hasta)
+  ).sort((a, b) => a.fecha.localeCompare(b.fecha));
+  if (!lista.length) { alert('No hay datos para esa categoría y rango de fechas.'); return; }
+
+  const aoa = [['Fecha', 'Mes', 'Categoría', 'Descripción', 'Envíos', 'Monto']];
+  lista.forEach(g => {
+    const [a, m] = g.fecha.split('-');
+    aoa.push([g.fecha, `${MESES_NOMBRE[parseInt(m) - 1]} ${a}`, getCat(g.cat).label, g.desc, nEnvios(g), Number(g.monto)]);
+  });
+  const totalMonto = lista.reduce((s, g) => s + Number(g.monto), 0);
+  const totalEnvios = lista.reduce((s, g) => s + nEnvios(g), 0);
+  aoa.push([]);
+  aoa.push(['TOTAL', '', '', '', totalEnvios, Math.round(totalMonto * 100) / 100]);
+
+  const ws = XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols'] = [{ wch: 12 }, { wch: 14 }, { wch: 22 }, { wch: 42 }, { wch: 9 }, { wch: 16 }];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Gastos');
+  const nombreCat = cat === 'all' ? 'todas' : cat;
+  XLSX.writeFile(wb, `gastos_${nombreCat}_${desde || 'inicio'}_a_${hasta || 'fin'}.xlsx`);
+  cerrarExport();
+}
+
+/* ============================================================
+   CARGA MASIVA  ·  CSV / Excel  →  BULK INSERT en Supabase
+   Sistema de PERFILES por sector: cada perfil sabe qué columnas
+   leer, a qué categoría asignar y cómo agrupar los montos.
+   ============================================================ */
+const PERFILES = {
+  generico: {
+    nombre: 'Genérico — 4 columnas (Fecha, Categoría, Descripción, Monto)',
+    posicional: true,            // usa la posición de las columnas, no sus nombres
+    agrupar: 'ninguno',
+    ayuda: 'Columnas en orden: <strong>Fecha, Categoría, Descripción, Monto</strong>. Se admite encabezado en la 1ª fila. Fechas en <code>AAAA-MM-DD</code> o <code>DD/MM/AAAA</code>.'
+  },
+  amba_flex: {
+    nombre: 'AMBA Flex → Envíos Flex ML (total por día)',
+    categoria: 'flex',           // categoría fija del panel
+    colFecha: ['Fecha de entrega'],
+    colMonto: ['Costo Envio'],
+    colRef: ['ID Cardinal'],     // identificador único de cada envío (anti-duplicados)
+    agrupar: 'dia',              // el panel muestra el total por día
+    etiqueta: 'AMBA Flex',
+    dedup: true,                 // guarda cada envío en 'envios' y no recarga los ya existentes
+    ayuda: 'Reporte AMBA Flex. Cada envío se identifica por <strong>ID Cardinal</strong>: los ya cargados no se duplican. Toma <strong>Fecha de entrega</strong> y <strong>Costo Envio</strong>, y muestra el total por día en <strong>Envíos Flex ML</strong>.'
+  },
+  tiendas: {
+    nombre: 'Tiendas (ICBC, Frávega, Megatone, OnCity)',
+    multiCategoria: true,                  // un mismo archivo trae varias tiendas
+    colCategoria: ['Canal venta'],         // columna que indica la tienda
+    mapCategoria: {                        // valor del archivo (normalizado) → categoría del panel
+      'icbc mall': 'icbc',
+      'oncity': 'oncity',
+      'fravega - vtex': 'fravega',
+      'fravega': 'fravega',
+      'megatone': 'megatone'
+    },
+    colFecha: ['Fecha'],                    // fecha de la venta (siempre completa)
+    colMonto: ['Costo envio'],
+    colRef: ['# Venta'],                    // identificador único de la venta (anti-duplicados)
+    colEstado: ['Estado'],
+    estadosIncluidos: ['entregadas', 'despachadas / en camino'],  // solo enviadas (normalizado)
+    permitirMontoCero: true,               // envío gratis cuenta como envío con costo $0
+    agrupar: 'dia',
+    dedup: true,
+    ayuda: 'Exportación de ventas. Identifica cada venta por <strong># Venta</strong> (anti-duplicados), rutea por <strong>Canal venta</strong> a cada tienda, usa <strong>Fecha</strong> de la venta y suma <strong>Costo envio</strong>. Solo cuenta ventas enviadas; el envío gratis cuenta como envío con costo $0.'
+  },
+  distri_argc: {
+    nombre: 'Distribución ARGC (CORP, Retiro Prov., Spot, Distribución)',
+    multiHoja: true,           // un archivo con varias hojas, cada hoja = una categoría
+    dedup: true,
+    agrupar: 'dia',
+    // Cada hoja (nombre normalizado) define su categoría y columnas. Se excluyen
+    // automáticamente las filas de TOTAL/subtotal (las que no tienen NRO_DOCUMENTO).
+    hojas: {
+      'corp':         { categoria: 'corp',    colFecha: ['FECHA_REMITO'],   colMonto: ['A_COBRAR'], colRef: ['NRO_DOCUMENTO'] },
+      're prove':     { categoria: 'reprove', colFecha: ['FECHA_REMITO'],   colMonto: ['A cobrar'], colRef: ['NRO_DOCUMENTO'] },
+      'spot':         { categoria: 'trans',   colFecha: ['FECHA_REMITO'],   colMonto: ['A_COBRAR'], colRef: ['NRO_DOCUMENTO'] },
+      'distribucion': { categoria: 'distrib', colFecha: ['FECHA DE RECEP'], colMonto: ['VALOR'],    colRef: ['NRO DOCUMENTO'] }
+    },
+    ayuda: 'Archivo de distribución con varias hojas. Cada hoja va a su categoría: <strong>CORP</strong>→Corporativos, <strong>RE PROVE</strong>→Retiro Proveedores, <strong>Spot</strong>→Transferencias, <strong>Distribucion</strong>→Distribución. Se ignoran las filas de total/subtotal y se suma cada remito; los remitos ya cargados no se duplican.'
+  }
+  // ➕ Próximos sectores se agregan acá (ME1...)
+};
+
+// Normaliza texto para comparar encabezados (minúsculas, sin acentos ni espacios extra)
+function norm(s) { return String(s == null ? '' : s).trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); }
+
+// Llena el menú de sectores y muestra la ayuda del perfil elegido
+function initPerfiles() {
+  const sel = document.getElementById('bulkPerfil');
+  sel.innerHTML = Object.keys(PERFILES).map(k => `<option value="${k}">${PERFILES[k].nombre}</option>`).join('');
+  sel.addEventListener('change', actualizarAyudaBulk);
+  actualizarAyudaBulk();
+}
+function actualizarAyudaBulk() {
+  const k = document.getElementById('bulkPerfil').value;
+  document.getElementById('bulkAyuda').innerHTML = PERFILES[k] ? PERFILES[k].ayuda : '';
+}
+
+function abrirBulk() {
+  document.getElementById('bulkStatus').textContent = '';
+  document.getElementById('bulkStatus').className = 'bulk-status';
+  document.getElementById('csvInput').value = '';
+  document.getElementById('modalBulk').classList.add('open');
+}
+function cerrarBulk() { document.getElementById('modalBulk').classList.remove('open'); }
+
+// Parser de CSV que respeta comillas y comas internas
+function parseCSV(text) {
+  const rows = []; let cur = []; let field = ''; let inQ = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQ) {
+      if (c === '"') { if (text[i+1] === '"') { field += '"'; i++; } else inQ = false; }
+      else field += c;
+    } else {
+      if (c === '"') inQ = true;
+      else if (c === ',') { cur.push(field); field = ''; }
+      else if (c === '\n') { cur.push(field); rows.push(cur); cur = []; field = ''; }
+      else if (c === '\r') { /* ignora */ }
+      else field += c;
+    }
+  }
+  if (field.length || cur.length) { cur.push(field); rows.push(cur); }
+  return rows.filter(r => r.some(x => x.trim() !== ''));
+}
+
+// Lee TODAS las hojas de un archivo → { nombreHoja: filas[] }
+async function leerHojas(file) {
+  const nombre = file.name.toLowerCase();
+  if (nombre.endsWith('.xlsx') || nombre.endsWith('.xls')) {
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, { type: 'array' });
+    const out = {};
+    wb.SheetNames.forEach(sn => {
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], { header: 1, raw: true, defval: '' }).filter(r => r.some(x => String(x).trim() !== ''));
+      out[sn] = rows;
+    });
+    return out;
+  }
+  // CSV: una sola hoja sin nombre
+  const text = await file.text();
+  return { '': parseCSV(text) };
+}
+
+// Normaliza fecha a AAAA-MM-DD (acepta DD/MM/AAAA, DD-MM-AAAA o serial de Excel)
+function normFecha(v) {
+  // Celda de fecha de Excel (número serial)
+  if (typeof v === 'number' && typeof XLSX !== 'undefined' && XLSX.SSF && XLSX.SSF.parse_date_code) {
+    const d = XLSX.SSF.parse_date_code(v);
+    if (d && d.y) return `${d.y}-${String(d.m).padStart(2,'0')}-${String(d.d).padStart(2,'0')}`;
+  }
+  v = String(v).trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(v)) return v.substring(0, 10);
+  const m = v.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if (m) return `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+  return v;
+}
+
+// Convierte texto de monto a número (tolera $, puntos de miles y coma decimal)
+function parseMonto(v) {
+  if (typeof v === 'number') return v;
+  let s = String(v).replace(/[^0-9,.\-]/g, '').trim();
+  if (s.includes('.') && s.includes(',')) s = s.replace(/\./g, '').replace(',', '.'); // 1.234,56 → 1234.56
+  else if (s.includes(',')) s = s.replace(',', '.');                                   // 1234,56 → 1234.56
+  return parseFloat(s) || 0;
+}
+
+// Devuelve el rango [inicio, fin) de un mes 'AAAA-MM' para filtrar por fecha
+function rangoMes(ym) {
+  const [a, m] = ym.split('-').map(Number);
+  const ini = `${ym}-01`;
+  const fin = m === 12 ? `${a + 1}-01-01` : `${a}-${String(m + 1).padStart(2, '0')}-01`;
+  return { ini, fin };
+}
+
+// Busca el índice de una columna por nombre (entre varios candidatos)
+function buscarCol(header, candidatos) {
+  for (const c of candidatos) {
+    const cn = norm(c);
+    let idx = header.indexOf(cn);
+    if (idx >= 0) return idx;
+    idx = header.findIndex(h => h.includes(cn));
+    if (idx >= 0) return idx;
+  }
+  return -1;
+}
+
+// Detecta automáticamente el perfil de sector según los encabezados del archivo
+function detectarPerfil(rows) {
+  if (!rows.length) return null;
+  const header = rows[0].map(norm);
+  for (const k in PERFILES) {
+    const p = PERFILES[k];
+    if (p.posicional) continue;                 // el genérico no se autodetecta
+    if (buscarCol(header, p.colFecha) < 0) continue;
+    if (buscarCol(header, p.colMonto) < 0) continue;
+    if (p.colRef && buscarCol(header, p.colRef) < 0) continue;
+    if (p.colCategoria && buscarCol(header, p.colCategoria) < 0) continue;
+    return k;
+  }
+  return null;
+}
+
+// Construye los registros a insertar según el perfil del sector elegido
+function construirRegistros(rows, perfil) {
+  const registros = []; const errores = [];
+
+  // ---- Perfil GENÉRICO (posicional: Fecha, Categoría, Descripción, Monto) ----
+  if (perfil.posicional) {
+    let data = rows;
+    const first = rows[0].map(x => String(x)).join(' ').toLowerCase();
+    if (first.includes('fecha') || first.includes('monto') || first.includes('categor')) data = rows.slice(1);
+    data.forEach((cols, i) => {
+      const linea = i + 2;
+      const fecha = normFecha(cols[0] !== undefined ? cols[0] : '');
+      const categoria = normalizeCat(String(cols[1] != null ? cols[1] : ''));
+      const descripcion = String(cols[2] != null ? cols[2] : '').trim() || 'Sin descripción';
+      const monto = parseMonto(cols[3] != null ? cols[3] : '');
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) { errores.push(`Fila ${linea}: fecha inválida ("${cols[0]}")`); return; }
+      if (!monto || monto <= 0) { errores.push(`Fila ${linea}: monto inválido ("${cols[3]}")`); return; }
+      registros.push({ fecha, categoria, descripcion, monto });
+    });
+    return { registros, errores };
+  }
+
+  // ---- Perfil por NOMBRES de columna (requiere encabezado) ----
+  const header = rows[0].map(norm);
+  const iFecha = buscarCol(header, perfil.colFecha);
+  const iMonto = buscarCol(header, perfil.colMonto);
+  if (iFecha < 0 || iMonto < 0) {
+    errores.push(`No se encontró la columna ${iFecha < 0 ? '"' + perfil.colFecha[0] + '"' : '"' + perfil.colMonto[0] + '"'} en el encabezado del archivo.`);
+    return { registros, errores };
+  }
+
+  const items = [];
+  rows.slice(1).forEach((cols, i) => {
+    const linea = i + 2;
+    const fecha = normFecha(cols[iFecha] !== undefined ? cols[iFecha] : '');
+    const monto = parseMonto(cols[iMonto] != null ? cols[iMonto] : '');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) { errores.push(`Fila ${linea}: fecha inválida ("${cols[iFecha]}")`); return; }
+    if (!monto || monto <= 0) { errores.push(`Fila ${linea}: monto inválido ("${cols[iMonto]}")`); return; }
+    items.push({ fecha, monto });
+  });
+
+  if (perfil.agrupar === 'dia') {
+    const map = {};
+    items.forEach(it => { if (!map[it.fecha]) map[it.fecha] = { sum: 0, n: 0 }; map[it.fecha].sum += it.monto; map[it.fecha].n++; });
+    Object.keys(map).sort().forEach(f => registros.push({ fecha: f, categoria: perfil.categoria, descripcion: `${perfil.etiqueta} — ${map[f].n} envíos`, monto: Math.round(map[f].sum) }));
+  } else if (perfil.agrupar === 'mes') {
+    const map = {};
+    items.forEach(it => { const ym = it.fecha.substring(0, 7); if (!map[ym]) map[ym] = { sum: 0, n: 0 }; map[ym].sum += it.monto; map[ym].n++; });
+    Object.keys(map).sort().forEach(ym => { const [a, m] = ym.split('-'); registros.push({ fecha: `${ym}-01`, categoria: perfil.categoria, descripcion: `${perfil.etiqueta} ${MESES_NOMBRE[parseInt(m) - 1]} ${a} — ${map[ym].n} envíos`, monto: Math.round(map[ym].sum) }); });
+  } else {
+    items.forEach(it => registros.push({ fecha: it.fecha, categoria: perfil.categoria, descripcion: perfil.etiqueta, monto: it.monto }));
+  }
+  return { registros, errores };
+}
+
+// Etiqueta (prefijo de la descripción) para un perfil/categoría
+function etiquetaDe(perfil, cat) {
+  return perfil.multiCategoria ? getCat(cat).label : (perfil.etiqueta || getCat(cat).label);
+}
+
+// Regenera el total por día en 'gastos' desde 'envios', para un sector + categoría + mes
+async function regenerarCategoriaMes(sector, categoria, etiqueta, ym, unidad) {
+  unidad = unidad || 'envíos';
+  const { ini, fin } = rangoMes(ym);
+  // Borra los agregados previos de esa categoría/sector en ese mes
+  const del = await sb.from(TABLA).delete().eq('categoria', categoria).like('descripcion', etiqueta + ' —%').gte('fecha', ini).lt('fecha', fin);
+  if (del.error) throw del.error;
+  // Trae TODOS los envíos de ese sector+categoría en ese mes (paginado de a 1000)
+  const todos = []; let desde = 0; const pag = 1000;
+  while (true) {
+    const { data, error } = await sb.from(TABLA_ENVIOS).select('fecha,monto').eq('sector', sector).eq('categoria', categoria).gte('fecha', ini).lt('fecha', fin).range(desde, desde + pag - 1);
+    if (error) throw error;
+    todos.push(...data);
+    if (data.length < pag) break;
+    desde += pag;
+  }
+  // Agrupa por día (suma costo + cuenta unidades) y vuelve a insertar
+  const map = {};
+  todos.forEach(t => { const f = t.fecha; if (!map[f]) map[f] = { sum: 0, n: 0 }; map[f].sum += Number(t.monto) || 0; map[f].n++; });
+  const registros = Object.keys(map).sort().map(f => ({ fecha: f, categoria, descripcion: `${etiqueta} — ${map[f].n} ${unidad}`, monto: Math.round(map[f].sum * 100) / 100 }));
+  for (let i = 0; i < registros.length; i += 500) {
+    const ins = await sb.from(TABLA).insert(registros.slice(i, i + 500));
+    if (ins.error) throw ins.error;
+  }
+}
+
+// Detecta un perfil multi-hoja según los nombres de las hojas del archivo
+function detectarPerfilMulti(hojas) {
+  const nombres = Object.keys(hojas).map(norm);
+  for (const k in PERFILES) {
+    const p = PERFILES[k];
+    if (!p.multiHoja) continue;
+    const claves = Object.keys(p.hojas);
+    if (claves.some(c => nombres.some(n => n === c || n.includes(c) || c.includes(n)))) return k;
+  }
+  return null;
+}
+
+// Carga de archivo multi-hoja: cada hoja → categoría, agrupando por viaje (o remito)
+async function procesarMultiHoja(hojas, perfil, sector, status) {
+  const vistos = new Set(); const envios = []; const errores = [];
+  const catUnidad = {};
+  const resumen = [];
+  for (const nombreHoja in hojas) {
+    const cfg = perfil.hojas[norm(nombreHoja)];
+    if (!cfg) continue;                       // hoja no mapeada (se ignora)
+    const rows = hojas[nombreHoja];
+    if (!rows || rows.length < 2) continue;
+    const header = rows[0].map(norm);
+    const iFecha = buscarCol(header, cfg.colFecha);
+    const iMonto = buscarCol(header, cfg.colMonto);
+    const iRef = buscarCol(header, cfg.colRef);
+    if (iFecha < 0 || iMonto < 0 || iRef < 0) { errores.push(`Hoja "${nombreHoja}": faltan columnas (fecha/monto/remito)`); continue; }
+    catUnidad[cfg.categoria] = 'envíos';
+
+    // Un registro por remito. Las filas de TOTAL/subtotal no tienen NRO_DOCUMENTO → se excluyen.
+    let n = 0;
+    rows.slice(1).forEach(cols => {
+      const rawref = String(cols[iRef] != null ? cols[iRef] : '').trim();
+      if (!rawref) return;                                          // fila de total/subtotal/vacía
+      const fecha = normFecha(cols[iFecha] !== undefined ? cols[iFecha] : '');
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return;               // sin fecha válida → se omite
+      const monto = parseMonto(cols[iMonto] != null ? cols[iMonto] : '') || 0;
+      const ref = `${cfg.categoria}:${rawref}`;                     // namespaced por categoría
+      if (vistos.has(ref)) return;
+      vistos.add(ref);
+      envios.push({ ref, sector, categoria: cfg.categoria, fecha, monto });   // monto con centavos (sin redondear)
+      n++;
+    });
+    resumen.push(`   • ${getCat(cfg.categoria).label}: ${n} envíos`);
+  }
+
+  if (!envios.length) {
+    status.className = 'bulk-status error';
+    status.textContent = 'No se encontraron datos válidos en las hojas reconocidas.\n' + errores.slice(0, 8).join('\n');
+    return;
+  }
+
+  try {
+    // 1) Cuáles ya existen (para informar)
+    const refs = envios.map(e => e.ref);
+    const existentes = new Set();
+    for (let i = 0; i < refs.length; i += 200) {
+      const { data, error } = await sb.from(TABLA_ENVIOS).select('ref').in('ref', refs.slice(i, i + 200));
+      if (error) throw error;
+      data.forEach(d => existentes.add(d.ref));
+    }
+    const nuevos = envios.length - existentes.size;
+
+    // 2) Inserta (los repetidos se ignoran por PK)
+    status.textContent = `Guardando ${nuevos} nuevo(s)...`;
+    for (let i = 0; i < envios.length; i += 500) {
+      const { error } = await sb.from(TABLA_ENVIOS).upsert(envios.slice(i, i + 500), { onConflict: 'ref', ignoreDuplicates: true });
+      if (error) throw error;
+    }
+
+    // 3) Regenera totales por día por cada (categoría + mes)
+    const pares = [...new Set(envios.map(e => e.categoria + '|' + e.fecha.substring(0, 7)))];
+    const meses = [...new Set(envios.map(e => e.fecha.substring(0, 7)))].sort();
+    const mesesTxt = meses.map(ym => { const [a, m] = ym.split('-'); return `${MESES_NOMBRE[parseInt(m) - 1]} ${a}`; }).join(', ');
+    status.textContent = `Actualizando totales por día (${mesesTxt})...`;
+    for (const p of pares) { const [cat, ym] = p.split('|'); await regenerarCategoriaMes(sector, cat, getCat(cat).label, ym, catUnidad[cat]); }
+
+    gastos = await cargarGastos();
+    render();
+
+    let msg = `✓ ${nuevos} nuevo(s) cargado(s). ${existentes.size} ya existían (omitidos).\n${resumen.join('\n')}\nTotales por día actualizados para: ${mesesTxt}.`;
+    if (errores.length) msg += `\n${errores.length} aviso(s):\n` + errores.slice(0, 6).join('\n');
+    status.className = 'bulk-status ok';
+    status.textContent = msg;
+  } catch (e) {
+    console.error(e);
+    status.className = 'bulk-status error';
+    status.textContent = 'Error durante la carga:\n' + (e.message || e);
+    gastos = await cargarGastos(); render();
+  }
+}
+
+// Resuelve la categoría de una fila según el mapeo del perfil (multi-tienda)
+function resolverCategoria(perfil, valor) {
+  if (!perfil.multiCategoria) return perfil.categoria;
+  const v = norm(valor);
+  if (perfil.mapCategoria[v]) return perfil.mapCategoria[v];
+  for (const k in perfil.mapCategoria) { if (v.includes(k) || k.includes(v)) return perfil.mapCategoria[k]; }
+  return null;
+}
+
+// Carga con anti-duplicados: guarda cada envío por ID y regenera los totales diarios por categoría
+async function procesarConDedup(rows, perfil, sector, status) {
+  const header = rows[0].map(norm);
+  const iFecha = buscarCol(header, perfil.colFecha);
+  const iMonto = buscarCol(header, perfil.colMonto);
+  const iRef = buscarCol(header, perfil.colRef);
+  const iCat = perfil.colCategoria ? buscarCol(header, perfil.colCategoria) : -1;
+  const iEstado = perfil.colEstado ? buscarCol(header, perfil.colEstado) : -1;
+
+  const falta = iFecha < 0 ? perfil.colFecha[0] : iMonto < 0 ? perfil.colMonto[0] : iRef < 0 ? perfil.colRef[0]
+    : (perfil.colCategoria && iCat < 0) ? perfil.colCategoria[0] : null;
+  if (falta) { status.className = 'bulk-status error'; status.textContent = `No se encontró la columna "${falta}" en el encabezado.`; return; }
+
+  // Extrae los envíos del archivo (deduplicando refs repetidos dentro del mismo archivo)
+  const vistos = new Set(); const envios = []; const errores = [];
+  let omitEstado = 0, omitTienda = 0;
+  rows.slice(1).forEach((cols, i) => {
+    const linea = i + 2;
+    // Filtro por estado (ej: solo ventas enviadas)
+    if (iEstado >= 0 && perfil.estadosIncluidos && !perfil.estadosIncluidos.includes(norm(cols[iEstado]))) { omitEstado++; return; }
+    const ref = String(cols[iRef] != null ? cols[iRef] : '').trim();
+    if (!ref) { errores.push(`Fila ${linea}: sin ${perfil.colRef[0]}`); return; }
+    if (vistos.has(ref)) return;            // misma venta/envío repetido (otra línea de producto)
+    const fecha = normFecha(cols[iFecha] !== undefined ? cols[iFecha] : '');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) { errores.push(`Fila ${linea}: fecha inválida ("${cols[iFecha]}")`); return; }
+    let monto = parseMonto(cols[iMonto] != null ? cols[iMonto] : '');
+    if (!(monto >= 0)) monto = 0;
+    if (!perfil.permitirMontoCero && monto <= 0) { errores.push(`Fila ${linea}: monto inválido ("${cols[iMonto]}")`); return; }
+    const categoria = resolverCategoria(perfil, iCat >= 0 ? cols[iCat] : '');
+    if (!categoria) { omitTienda++; return; }
+    vistos.add(ref);
+    envios.push({ ref, sector, categoria, fecha, monto });
+  });
+
+  if (!envios.length) {
+    status.className = 'bulk-status error';
+    status.textContent = 'No se encontraron envíos válidos.\n' + errores.slice(0, 8).join('\n');
+    return;
+  }
+
+  try {
+    // 1) Averigua cuáles ya existen (para informar) consultando por lotes
+    const refs = envios.map(e => e.ref);
+    const existentes = new Set();
+    for (let i = 0; i < refs.length; i += 200) {
+      const { data, error } = await sb.from(TABLA_ENVIOS).select('ref').in('ref', refs.slice(i, i + 200));
+      if (error) throw error;
+      data.forEach(d => existentes.add(d.ref));
+    }
+    const nuevos = envios.length - existentes.size;
+
+    // 2) Inserta todos; los ya existentes se ignoran por la clave primaria (ref)
+    status.textContent = `Guardando envíos (${nuevos} nuevo(s), ${existentes.size} ya existían)...`;
+    for (let i = 0; i < envios.length; i += 500) {
+      const { error } = await sb.from(TABLA_ENVIOS).upsert(envios.slice(i, i + 500), { onConflict: 'ref', ignoreDuplicates: true });
+      if (error) throw error;
+    }
+
+    // 3) Regenera el total por día en 'gastos' para cada (categoría + mes) presente
+    const pares = [...new Set(envios.map(e => e.categoria + '|' + e.fecha.substring(0, 7)))];
+    const meses = [...new Set(envios.map(e => e.fecha.substring(0, 7)))].sort();
+    const mesesTxt = meses.map(ym => { const [a, m] = ym.split('-'); return `${MESES_NOMBRE[parseInt(m) - 1]} ${a}`; }).join(', ');
+    status.textContent = `Actualizando totales por día (${mesesTxt})...`;
+    for (const p of pares) { const [cat, ym] = p.split('|'); await regenerarCategoriaMes(sector, cat, etiquetaDe(perfil, cat), ym); }
+
+    // 4) Refresca el panel
+    gastos = await cargarGastos();
+    render();
+
+    // Resumen por categoría de lo que vino en el archivo
+    const porCat = {};
+    envios.forEach(e => { porCat[e.categoria] = (porCat[e.categoria] || 0) + 1; });
+    const detCat = Object.keys(porCat).map(c => `   • ${getCat(c).label}: ${porCat[c]} envíos`).join('\n');
+
+    let msg = `✓ ${nuevos} envío(s) nuevo(s) cargado(s). ${existentes.size} ya existían (omitidos).\n${detCat}\nTotales por día actualizados para: ${mesesTxt}.`;
+    if (omitEstado) msg += `\n${omitEstado} fila(s) omitida(s) por estado no incluido.`;
+    if (omitTienda) msg += `\n${omitTienda} fila(s) omitida(s) por tienda no reconocida.`;
+    if (errores.length) msg += `\n${errores.length} fila(s) con error:\n` + errores.slice(0, 6).join('\n') + (errores.length > 6 ? '\n...' : '');
+    status.className = 'bulk-status ok';
+    status.textContent = msg;
+  } catch (e) {
+    console.error(e);
+    status.className = 'bulk-status error';
+    status.textContent = 'Error durante la carga:\n' + (e.message || e);
+    gastos = await cargarGastos(); render();
+  }
+}
+
+async function procesarCSV(file) {
+  const status = document.getElementById('bulkStatus');
+  status.className = 'bulk-status';
+  if (!sb) { status.className = 'bulk-status error'; status.textContent = 'Configurá primero SUPABASE_URL y SUPABASE_ANON_KEY.'; return; }
+  if (!file) return;
+
+  let perfilKey = document.getElementById('bulkPerfil').value;
+  let perfil = PERFILES[perfilKey] || PERFILES.generico;
+
+  status.textContent = `Leyendo "${file.name}"...`;
+  let hojas;
+  try { hojas = await leerHojas(file); }
+  catch (e) { console.error(e); status.className = 'bulk-status error'; status.textContent = 'No se pudo leer el archivo.'; return; }
+  const nombresHoja = Object.keys(hojas);
+  const rows = hojas[nombresHoja[0]] || [];   // primera hoja (para perfiles de una sola hoja)
+
+  if (!rows.length && nombresHoja.length <= 1) { status.className = 'bulk-status error'; status.textContent = 'El archivo está vacío.'; return; }
+
+  // Si está en "Genérico" pero el archivo coincide con un sector conocido, lo usa automáticamente
+  let aviso = '';
+  if (perfil.posicional) {
+    const det = detectarPerfilMulti(hojas) || detectarPerfil(rows);
+    if (det) {
+      perfilKey = det;
+      perfil = PERFILES[det];
+      document.getElementById('bulkPerfil').value = det;
+      actualizarAyudaBulk();
+      aviso = `Formato detectado automáticamente: ${perfil.nombre}.\n`;
+    }
+  }
+
+  // Perfil multi-hoja (un archivo, varias hojas → varias categorías)
+  if (perfil.multiHoja) { await procesarMultiHoja(hojas, perfil, perfilKey, status); return; }
+
+  // Perfiles con anti-duplicados por envío (tabla auxiliar 'envios')
+  if (perfil.dedup) { await procesarConDedup(rows, perfil, perfilKey, status); return; }
+
+  const { registros, errores } = construirRegistros(rows, perfil);
+
+  if (!registros.length) {
+    status.className = 'bulk-status error';
+    status.textContent = 'No se encontraron filas válidas.\n' + errores.slice(0, 10).join('\n');
+    return;
+  }
+
+  // ---- Reemplazo del sector: borra lo previo de esos meses y lo regenera ----
+  if (perfil.reemplazar && perfil.categoria && perfil.etiqueta) {
+    const meses = [...new Set(registros.map(r => r.fecha.substring(0, 7)))].sort();
+    const mesesTxt = meses.map(ym => { const [a, m] = ym.split('-'); return `${MESES_NOMBRE[parseInt(m) - 1]} ${a}`; }).join(', ');
+
+    // Cuenta cuántos registros del sector ya existen en esos meses
+    let existentes = 0;
+    for (const ym of meses) {
+      const { ini, fin } = rangoMes(ym);
+      const { count, error } = await sb.from(TABLA).select('id', { count: 'exact', head: true })
+        .eq('categoria', perfil.categoria).like('descripcion', perfil.etiqueta + '%').gte('fecha', ini).lt('fecha', fin);
+      if (error) { console.error(error); status.className = 'bulk-status error'; status.textContent = 'Error al revisar datos existentes:\n' + error.message; return; }
+      existentes += count || 0;
+    }
+
+    const ok = confirm(
+      `Sector: ${perfil.etiqueta}\nMeses en el archivo: ${mesesTxt}\n\n` +
+      (existentes > 0
+        ? `Se BORRARÁN ${existentes} registro(s) existente(s) de este sector en esos meses y se reemplazarán por ${registros.length} nuevo(s).`
+        : `No hay registros previos de este sector en esos meses. Se cargarán ${registros.length} nuevo(s).`) +
+      `\n\n¿Continuar?`
+    );
+    if (!ok) { status.className = 'bulk-status'; status.textContent = 'Carga cancelada. No se modificó nada.'; return; }
+
+    // Borra lo existente del sector en esos meses
+    if (existentes > 0) {
+      status.textContent = `Borrando ${existentes} registro(s) previo(s)...`;
+      for (const ym of meses) {
+        const { ini, fin } = rangoMes(ym);
+        const { error } = await sb.from(TABLA).delete()
+          .eq('categoria', perfil.categoria).like('descripcion', perfil.etiqueta + '%').gte('fecha', ini).lt('fecha', fin);
+        if (error) { console.error(error); status.className = 'bulk-status error'; status.textContent = 'Error al borrar datos previos:\n' + error.message; gastos = await cargarGastos(); render(); return; }
+      }
+    }
+  }
+
+  status.textContent = `Subiendo ${registros.length} registros a Supabase...`;
+  // Bulk insert (en lotes de 500 por seguridad)
+  let insertados = 0;
+  for (let i = 0; i < registros.length; i += 500) {
+    const lote = registros.slice(i, i + 500);
+    const { error } = await sb.from(TABLA).insert(lote);
+    if (error) { console.error(error); status.className = 'bulk-status error'; status.textContent = `Error al insertar (lote desde fila ${i+1}):\n${error.message}\nInsertados antes del error: ${insertados}`; gastos = await cargarGastos(); render(); return; }
+    insertados += lote.length;
+  }
+
+  const agrupado = perfil.agrupar === 'dia' ? ' (agrupados por día)' : perfil.agrupar === 'mes' ? ' (agrupados por mes)' : '';
+  let msg = aviso + `✓ ${insertados} registro(s) cargado(s) correctamente${agrupado}.`;
+  if (errores.length) msg += `\n${errores.length} fila(s) omitida(s):\n` + errores.slice(0, 10).join('\n') + (errores.length > 10 ? '\n...' : '');
+  status.className = 'bulk-status ok';
+  status.textContent = msg;
+
+  gastos = await cargarGastos();
+  render();
+}
+
+// Eventos de la zona de carga
+const dropzone = document.getElementById('dropzone');
+const csvInput = document.getElementById('csvInput');
+dropzone.addEventListener('click', () => csvInput.click());
+csvInput.addEventListener('change', e => { if (e.target.files[0]) procesarCSV(e.target.files[0]); });
+['dragenter','dragover'].forEach(ev => dropzone.addEventListener(ev, e => { e.preventDefault(); dropzone.classList.add('drag'); }));
+['dragleave','drop'].forEach(ev => dropzone.addEventListener(ev, e => { e.preventDefault(); dropzone.classList.remove('drag'); }));
+dropzone.addEventListener('drop', e => { const f = e.dataTransfer.files[0]; if (f) procesarCSV(f); });
+
+/* ============================================================ */
+document.getElementById('filtroMes').addEventListener('change', render);
+document.getElementById('filtroCategoria').addEventListener('change', render);
+document.getElementById('modalOverlay').addEventListener('click', e => { if(e.target===document.getElementById('modalOverlay')) cerrarModal(); });
+document.getElementById('modalBulk').addEventListener('click', e => { if(e.target===document.getElementById('modalBulk')) cerrarBulk(); });
+document.getElementById('modalExport').addEventListener('click', e => { if(e.target===document.getElementById('modalExport')) cerrarExport(); });
+document.addEventListener('keydown', e => { if(e.key==='Escape') { cerrarModal(); cerrarBulk(); cerrarExport(); } });
+
+// Arranque: prepara perfiles, trae los datos de Supabase y dibuja
+(async function init() {
+  initPerfiles();
+  gastos = await cargarGastos();
+  render();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+# Sistema
+.DS_Store
+Thumbs.db
+*.log
+
+# Editores
+.vscode/
+.idea/
+
+# Archivos de datos locales (no subir reportes ni exports)
+*.xlsx
+*.xls
+*.csv
+_*.py
