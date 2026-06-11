@@ -34,7 +34,8 @@
   header h1 { font-size: clamp(19px, 4vw, 24px); font-weight: 600; letter-spacing: -0.02em; }
   header p { font-size: 13px; color: var(--text-muted); margin-top: 3px; }
   .controls { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 1.5rem; align-items: center; }
-  .controls select, .controls input[type="month"] { font-family: 'DM Sans', sans-serif; font-size: 13px; padding: 7px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); cursor: pointer; }
+  .controls select, .controls input[type="month"], .controls input[type="date"] { font-family: 'DM Sans', sans-serif; font-size: 13px; padding: 7px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); cursor: pointer; }
+  .controls .ctrl-label { font-size: 12px; color: var(--text-muted); font-weight: 500; }
   .btn { font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500; padding: 7px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); cursor: pointer; display: flex; align-items: center; gap: 6px; transition: background 0.15s; }
   .btn:hover { background: var(--bg); }
   .btn-primary { background: var(--text); color: var(--surface); border-color: var(--text); }
@@ -104,11 +105,11 @@
     header > div:last-child .btn { justify-content: center; }
     header > div:last-child .btn:last-child { grid-column: 1 / -1; }
     .controls { gap: 8px; }
-    .controls select, .controls input[type="month"] { flex: 1 1 140px; }
+    .controls select, .controls input[type="month"], .controls input[type="date"] { flex: 1 1 140px; }
     .metric-grid { grid-template-columns: repeat(2, 1fr); }
     /* Toques táctiles más cómodos */
     .btn { padding: 10px 14px; }
-    .controls select, .controls input[type="month"] { padding: 10px 12px; }
+    .controls select, .controls input[type="month"], .controls input[type="date"] { padding: 10px 12px; }
     .mes-grid { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); }
     /* Tabla más compacta */
     thead th, td { padding: 8px 7px; }
@@ -129,6 +130,19 @@
   @media (hover: none) and (pointer: coarse) {
     .btn-danger { min-width: 34px; min-height: 30px; }
   }
+
+  /* Paginación del detalle */
+  .paginacion { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
+  .paginacion .pag-info { font-size: 12px; color: var(--text-muted); }
+  .paginacion .pag-btns { display: flex; gap: 6px; align-items: center; }
+  .pag-btn { font-family: 'DM Sans', sans-serif; font-size: 13px; padding: 6px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); cursor: pointer; }
+  .pag-btn:hover:not(:disabled) { background: var(--bg); }
+  .pag-btn:disabled { opacity: 0.4; cursor: default; }
+
+  /* Botón subir al inicio */
+  #btnTop { position: fixed; bottom: 22px; right: 22px; width: 46px; height: 46px; border-radius: 50%; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); font-size: 20px; cursor: pointer; box-shadow: 0 4px 18px rgba(0,0,0,0.14); display: none; align-items: center; justify-content: center; z-index: 150; transition: background 0.15s, transform 0.15s; }
+  #btnTop:hover { background: var(--bg); transform: translateY(-2px); }
+  #btnTop.show { display: flex; }
 </style>
 </head>
 <body>
@@ -152,7 +166,10 @@
 </div>
 
 <div class="controls">
-  <input type="month" id="filtroMes" value="">
+  <span class="ctrl-label">Desde</span>
+  <input type="date" id="filtroDesde">
+  <span class="ctrl-label">Hasta</span>
+  <input type="date" id="filtroHasta">
   <select id="filtroCategoria">
     <option value="all">Todas las categorías</option>
     <option value="flex">Envíos Flex ML</option>
@@ -183,7 +200,7 @@
     <div style="position:relative; width:100%; height:240px;"><canvas id="donutChart"></canvas></div>
   </div>
   <div class="card">
-    <div class="card-title">evolución mensual</div>
+    <div class="card-title" id="tituloEvolucion">evolución mensual</div>
     <div class="legend" id="legendLine"></div>
     <div style="position:relative; width:100%; height:240px;"><canvas id="lineChart"></canvas></div>
   </div>
@@ -214,6 +231,13 @@
     </table>
   </div>
   <div id="tablaEmpty" class="empty" style="display:none;">No hay gastos para el período seleccionado.</div>
+  <div class="paginacion" id="paginacion" style="display:none;">
+    <span class="pag-info" id="pagInfo"></span>
+    <div class="pag-btns">
+      <button class="pag-btn" id="pagPrev" onclick="cambiarPagina(-1)">‹ Anterior</button>
+      <button class="pag-btn" id="pagNext" onclick="cambiarPagina(1)">Siguiente ›</button>
+    </div>
+  </div>
 </div>
 
 <!-- Modal: nuevo gasto -->
@@ -333,6 +357,9 @@ const MESES_NOMBRE = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','
 
 let gastos = [];
 let donutChart, lineChart, barChart;
+let paginaActual = 1;            // página activa del detalle
+const POR_PAGINA = 15;          // filas por página
+let listaActual = [];           // último listado filtrado (para paginar sin recalcular)
 
 /* ============================================================
    CAPA DE DATOS  ·  SUPABASE
@@ -359,15 +386,24 @@ function fmtK(n) { return n >= 1000 ? '$' + (n/1000).toFixed(0) + 'k' : '$' + Ma
 function nEnvios(g) { const m = /—\s*([\d.]+)\s*(?:env[ií]os?|viajes?)/i.exec(g.desc || ''); return m ? parseInt(m[1].replace(/\./g, ''), 10) || 0 : 0; }
 
 function limpiarFiltros() {
-  document.getElementById('filtroMes').value = '';
+  document.getElementById('filtroDesde').value = '';
+  document.getElementById('filtroHasta').value = '';
   document.getElementById('filtroCategoria').value = 'all';
+  paginaActual = 1;
   render();
 }
 
+// Cambio de filtros: vuelve a la página 1 del detalle
+function onFiltroChange() { paginaActual = 1; render(); }
+
 function getFiltered() {
-  const mes = document.getElementById('filtroMes').value;
+  const desde = document.getElementById('filtroDesde').value;
+  const hasta = document.getElementById('filtroHasta').value;
   const cat = document.getElementById('filtroCategoria').value;
-  return gastos.filter(g => (!mes || g.fecha.startsWith(mes)) && (cat === 'all' || g.cat === cat));
+  return gastos.filter(g =>
+    (!desde || g.fecha >= desde) &&
+    (!hasta || g.fecha <= hasta) &&
+    (cat === 'all' || g.cat === cat));
 }
 
 function getMesesConGastos() {
@@ -377,6 +413,7 @@ function getMesesConGastos() {
 
 function render() {
   const filtrados = getFiltered();
+  listaActual = filtrados;
   const totalFiltrado = filtrados.reduce((s,g) => s+g.monto, 0);
   const totalesCat = {}; const enviosCat = {};
   Object.keys(CATEGORIAS).forEach(k => { totalesCat[k] = 0; enviosCat[k] = 0; });
@@ -403,7 +440,9 @@ function render() {
   const catFiltro = document.getElementById('filtroCategoria').value;
   const baseCat = catFiltro === 'all' ? gastos : gastos.filter(g => g.cat === catFiltro);
   const meses = [...new Set(baseCat.map(g => g.fecha.substring(0,7)))].sort().reverse();
-  const mesActivo = document.getElementById('filtroMes').value;
+  const fDesde = document.getElementById('filtroDesde').value;
+  const fHasta = document.getElementById('filtroHasta').value;
+  const mesActivo = (fDesde && fHasta && fDesde.substring(0,7) === fHasta.substring(0,7)) ? fDesde.substring(0,7) : '';
   const mesGrid = document.getElementById('mesGrid');
   mesGrid.innerHTML = meses.length
     ? meses.map(m => {
@@ -426,8 +465,19 @@ function render() {
 }
 
 function seleccionarMes(m) {
-  document.getElementById('filtroMes').value = m;
+  const [a, mm] = m.split('-');
+  const ultimo = new Date(parseInt(a), parseInt(mm), 0).getDate();   // último día del mes
+  document.getElementById('filtroDesde').value = `${m}-01`;
+  document.getElementById('filtroHasta').value = `${m}-${String(ultimo).padStart(2,'0')}`;
+  paginaActual = 1;
   render();
+}
+
+function cambiarPagina(delta) {
+  paginaActual += delta;
+  renderTabla(listaActual);
+  const t = document.querySelector('table');
+  if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function renderDonut(totales) {
@@ -445,16 +495,44 @@ function renderDonut(totales) {
 }
 
 function renderLine() {
-  const meses = getMesesConGastos().reverse().slice(-8);
-  if (!meses.length) { if(lineChart){lineChart.destroy();lineChart=null;} document.getElementById('legendLine').innerHTML=''; return; }
-  const labels = meses.map(m => { const [,mm]=m.split('-'); return MESES_NOMBRE[parseInt(mm)-1].substring(0,3); });
-  document.getElementById('legendLine').innerHTML = Object.keys(CATEGORIAS).map(k =>
+  const desde = document.getElementById('filtroDesde').value;
+  const hasta = document.getElementById('filtroHasta').value;
+  const cats = Object.keys(CATEGORIAS);
+  const titulo = document.getElementById('tituloEvolucion');
+  const unMes = desde && hasta && desde.substring(0,7) === hasta.substring(0,7);
+
+  // Leyenda (siempre todas las categorías)
+  document.getElementById('legendLine').innerHTML = cats.map(k =>
     `<span class="legend-item"><span class="legend-sq" style="background:${getCat(k).color};border-radius:50%;width:8px;height:8px;"></span>${getCat(k).label}</span>`
   ).join('');
+
+  let labels, datasets;
+  if (unMes) {
+    // Vista DIARIA del mes seleccionado
+    const ym = desde.substring(0,7);
+    const [a, mm] = ym.split('-');
+    const ultimo = new Date(parseInt(a), parseInt(mm), 0).getDate();
+    const dias = [];
+    for (let d = 1; d <= ultimo; d++) dias.push(`${ym}-${String(d).padStart(2,'0')}`);
+    labels = dias.map(d => String(parseInt(d.substring(8))));
+    datasets = cats.map(k => ({ label:getCat(k).label, data:dias.map(d=>gastos.filter(g=>g.fecha===d && g.cat===k).reduce((s,g)=>s+g.monto,0)), borderColor:getCat(k).color, tension:0.3, fill:false, borderWidth:2, pointRadius:2, pointBackgroundColor:getCat(k).color }));
+    titulo.textContent = `evolución diaria — ${MESES_NOMBRE[parseInt(mm)-1]} ${a}`;
+  } else {
+    // Vista MENSUAL (rango filtrado o últimos 8 meses)
+    titulo.textContent = 'evolución mensual';
+    let meses = getMesesConGastos().reverse();   // ascendente
+    if (desde) meses = meses.filter(m => m >= desde.substring(0,7));
+    if (hasta) meses = meses.filter(m => m <= hasta.substring(0,7));
+    if (!desde && !hasta) meses = meses.slice(-8);
+    if (!meses.length) { if(lineChart){lineChart.destroy();lineChart=null;} return; }
+    labels = meses.map(m => { const [,mm]=m.split('-'); return MESES_NOMBRE[parseInt(mm)-1].substring(0,3); });
+    datasets = cats.map(k => ({ label:getCat(k).label, data:meses.map(m=>gastos.filter(g=>g.fecha.startsWith(m)&&g.cat===k).reduce((s,g)=>s+g.monto,0)), borderColor:getCat(k).color, tension:0.4, fill:false, borderWidth:2, pointRadius:3, pointBackgroundColor:getCat(k).color }));
+  }
+
   if (lineChart) lineChart.destroy();
   lineChart = new Chart(document.getElementById('lineChart'), {
     type: 'line',
-    data: { labels, datasets: Object.keys(CATEGORIAS).map(k => ({ label:getCat(k).label, data:meses.map(m=>gastos.filter(g=>g.fecha.startsWith(m)&&g.cat===k).reduce((s,g)=>s+g.monto,0)), borderColor:getCat(k).color, tension:0.4, fill:false, borderWidth:2, pointRadius:3, pointBackgroundColor:getCat(k).color })) },
+    data: { labels, datasets },
     options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}, tooltip:{callbacks:{label:ctx=>` ${ctx.dataset.label}: ${fmt(ctx.raw)}`}}}, scales:{ y:{ticks:{callback:v=>fmtK(v),font:{size:11}},grid:{color:'rgba(128,128,128,0.08)'}}, x:{ticks:{font:{size:11}},grid:{display:false}} }}
   });
 }
@@ -473,9 +551,18 @@ function renderTabla(lista) {
   const sorted = [...lista].sort((a,b) => b.fecha.localeCompare(a.fecha));
   document.getElementById('countLabel').textContent = sorted.length + ' registros';
   const empty = document.getElementById('tablaEmpty');
-  if (!sorted.length) { document.getElementById('tablaBody').innerHTML=''; empty.style.display='block'; return; }
+  const pag = document.getElementById('paginacion');
+  if (!sorted.length) { document.getElementById('tablaBody').innerHTML=''; empty.style.display='block'; pag.style.display='none'; return; }
   empty.style.display = 'none';
-  document.getElementById('tablaBody').innerHTML = sorted.map(g => {
+
+  // Paginación
+  const totalPag = Math.ceil(sorted.length / POR_PAGINA);
+  if (paginaActual > totalPag) paginaActual = totalPag;
+  if (paginaActual < 1) paginaActual = 1;
+  const ini = (paginaActual - 1) * POR_PAGINA;
+  const pageRows = sorted.slice(ini, ini + POR_PAGINA);
+
+  document.getElementById('tablaBody').innerHTML = pageRows.map(g => {
     const [anio, gm] = g.fecha.split('-');
     return `<tr>
       <td style="font-family:'DM Mono',monospace;font-size:12px;color:var(--text-muted)">${g.fecha}</td>
@@ -486,6 +573,17 @@ function renderTabla(lista) {
       <td style="text-align:center;"><button class="btn btn-danger" style="padding:3px 8px;font-size:11px;" onclick="eliminarGasto(${g.id})">✕</button></td>
     </tr>`;
   }).join('');
+
+  // Controles de paginación
+  if (totalPag > 1) {
+    pag.style.display = 'flex';
+    document.getElementById('pagInfo').textContent =
+      `Página ${paginaActual} de ${totalPag} · ${ini + 1}–${Math.min(ini + POR_PAGINA, sorted.length)} de ${sorted.length}`;
+    document.getElementById('pagPrev').disabled = paginaActual <= 1;
+    document.getElementById('pagNext').disabled = paginaActual >= totalPag;
+  } else {
+    pag.style.display = 'none';
+  }
 }
 
 function abrirModal() {
@@ -510,8 +608,7 @@ async function agregarGasto() {
   if (error) { console.error(error); alert('Error al guardar en Supabase:\n' + error.message); return; }
   if (data && data[0]) gastos.push(fromRow(data[0]));
   cerrarModal();
-  document.getElementById('filtroMes').value = fecha.substring(0,7);
-  render();
+  seleccionarMes(fecha.substring(0,7));   // muestra el mes del gasto nuevo
 }
 
 async function eliminarGasto(id) {
@@ -538,14 +635,10 @@ function abrirExport() {
   // Si hay filtros activos en el panel, los toma como punto de partida
   const catActual = document.getElementById('filtroCategoria').value;
   if (catActual && catActual !== 'all') sel.value = catActual;
-  const mesActual = document.getElementById('filtroMes').value;
-  if (mesActual) {
-    const [a, m] = mesActual.split('-');
-    document.getElementById('expDesde').value = `${mesActual}-01`;
-    const finMes = m === '12' ? `${parseInt(a)+1}-01-01` : `${a}-${String(parseInt(m)+1).padStart(2,'0')}-01`;
-    const d = new Date(finMes); d.setDate(d.getDate() - 1);
-    document.getElementById('expHasta').value = `${mesActual}-${String(d.getDate()).padStart(2,'0')}`;
-  }
+  const fDesde = document.getElementById('filtroDesde').value;
+  const fHasta = document.getElementById('filtroHasta').value;
+  if (fDesde) document.getElementById('expDesde').value = fDesde;
+  if (fHasta) document.getElementById('expHasta').value = fHasta;
   document.getElementById('modalExport').classList.add('open');
 }
 function cerrarExport() { document.getElementById('modalExport').classList.remove('open'); }
@@ -604,15 +697,17 @@ const PERFILES = {
     ayuda: 'Reporte AMBA Flex. Cada envío se identifica por <strong>ID Cardinal</strong>: los ya cargados no se duplican. Toma <strong>Fecha de entrega</strong> y <strong>Costo Envio</strong>, y muestra el total por día en <strong>Envíos Flex ML</strong>.'
   },
   tiendas: {
-    nombre: 'Tiendas (ICBC, Frávega, Megatone, OnCity)',
-    multiCategoria: true,                  // un mismo archivo trae varias tiendas
-    colCategoria: ['Canal venta'],         // columna que indica la tienda
+    nombre: 'Ventas (Tiendas + ME1) por Canal venta',
+    multiCategoria: true,                  // un mismo archivo trae varios canales
+    colCategoria: ['Canal venta'],         // columna que indica el canal/tienda
     mapCategoria: {                        // valor del archivo (normalizado) → categoría del panel
       'icbc mall': 'icbc',
       'oncity': 'oncity',
       'fravega - vtex': 'fravega',
       'fravega': 'fravega',
-      'megatone': 'megatone'
+      'megatone': 'megatone',
+      'mercadolibre': 'me1',
+      'mercado libre': 'me1'
     },
     colFecha: ['Fecha'],                    // fecha de la venta (siempre completa)
     colMonto: ['Costo envio'],
@@ -622,7 +717,7 @@ const PERFILES = {
     permitirMontoCero: true,               // envío gratis cuenta como envío con costo $0
     agrupar: 'dia',
     dedup: true,
-    ayuda: 'Exportación de ventas. Identifica cada venta por <strong># Venta</strong> (anti-duplicados), rutea por <strong>Canal venta</strong> a cada tienda, usa <strong>Fecha</strong> de la venta y suma <strong>Costo envio</strong>. Solo cuenta ventas enviadas; el envío gratis cuenta como envío con costo $0.'
+    ayuda: 'Exportación de ventas. Identifica cada venta por <strong># Venta</strong> (anti-duplicados), rutea por <strong>Canal venta</strong> a su categoría (ICBC, Frávega, Megatone, OnCity, <strong>Mercadolibre→ME1</strong>), usa <strong>Fecha</strong> de la venta y suma <strong>Costo envio</strong>. Solo cuenta ventas enviadas; el envío gratis cuenta como envío con costo $0.'
   },
   distri_argc: {
     nombre: 'Distribución ARGC (CORP, Retiro Prov., Spot, Distribución)',
@@ -1148,8 +1243,10 @@ csvInput.addEventListener('change', e => { if (e.target.files[0]) procesarCSV(e.
 dropzone.addEventListener('drop', e => { const f = e.dataTransfer.files[0]; if (f) procesarCSV(f); });
 
 /* ============================================================ */
-document.getElementById('filtroMes').addEventListener('change', render);
-document.getElementById('filtroCategoria').addEventListener('change', render);
+document.getElementById('filtroDesde').addEventListener('change', onFiltroChange);
+document.getElementById('filtroHasta').addEventListener('change', onFiltroChange);
+document.getElementById('filtroCategoria').addEventListener('change', onFiltroChange);
+window.addEventListener('scroll', () => { document.getElementById('btnTop').classList.toggle('show', window.scrollY > 300); });
 document.getElementById('modalOverlay').addEventListener('click', e => { if(e.target===document.getElementById('modalOverlay')) cerrarModal(); });
 document.getElementById('modalBulk').addEventListener('click', e => { if(e.target===document.getElementById('modalBulk')) cerrarBulk(); });
 document.getElementById('modalExport').addEventListener('click', e => { if(e.target===document.getElementById('modalExport')) cerrarExport(); });
@@ -1162,5 +1259,6 @@ document.addEventListener('keydown', e => { if(e.key==='Escape') { cerrarModal()
   render();
 })();
 </script>
+<button id="btnTop" onclick="window.scrollTo({top:0,behavior:'smooth'})" title="Subir al inicio" aria-label="Subir al inicio">↑</button>
 </body>
 </html>
