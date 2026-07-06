@@ -5,172 +5,125 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Panel Gastos Logísticos</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<!-- ▼ Bootstrap 5 (estilos) -->
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <!-- ▼ CDN oficial de Supabase (JS v2) -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <!-- ▼ SheetJS para leer archivos Excel (.xlsx / .xls) -->
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
-  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  /* ===== Panel Gastos Logísticos · claro minimalista sobre Bootstrap ===== */
   :root {
-    --bg: #F7F6F2;
-    --surface: #FFFFFF;
-    --border: #E5E3DD;
-    --border-strong: #C8C5BC;
-    --text: #1A1917;
-    --text-muted: #6B6860;
-    --text-faint: #9E9B94;
-    --flex:  #1D9E75;
-    --me1:   #185FA5;
-    --icbc:  #BA7517;
-    --trans: #7F77DD;
-    --corp:  #D85A30;
-    --radius: 10px;
-    --radius-sm: 6px;
+    --bg: #f6f6f4;
+    --surface: #ffffff;
+    --surface-2: #f3f2ee;
+    --border: #e7e5df;
+    --text: #1f1e1c;
+    --text-muted: #6b6860;
+    --text-faint: #9e9b94;
+    --accent: #0d6efd;
+    --radius: 14px;
+    --radius-sm: 9px;
   }
-  body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; padding: clamp(1rem, 3vw, 2.5rem) clamp(1rem, 4vw, 2.5rem) 4rem; max-width: 1500px; margin: 0 auto; -webkit-text-size-adjust: 100%; }
-  header { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 1rem; margin-bottom: 1.75rem; }
-  header h1 { font-size: clamp(19px, 4vw, 24px); font-weight: 600; letter-spacing: -0.02em; }
-  header p { font-size: 13px; color: var(--text-muted); margin-top: 3px; }
-  .controls { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 1.5rem; align-items: center; }
-  .controls select, .controls input[type="month"], .controls input[type="date"] { font-family: 'DM Sans', sans-serif; font-size: 13px; padding: 7px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); cursor: pointer; }
-  .controls .ctrl-label { font-size: 12px; color: var(--text-muted); font-weight: 500; }
-  .btn { font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 500; padding: 7px 14px; border-radius: var(--radius-sm); border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); cursor: pointer; display: flex; align-items: center; gap: 6px; transition: background 0.15s; }
-  .btn:hover { background: var(--bg); }
-  .btn-primary { background: var(--text); color: var(--surface); border-color: var(--text); }
-  .btn-primary:hover { background: #333; }
-  .btn-danger { color: #cc3333; border-color: #cc3333; }
-  .btn-danger:hover { background: #fff5f5; }
-  .metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 1.5rem; }
-  .metric { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
+  body {
+    font-family: 'Inter', system-ui, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    padding: clamp(1rem, 3vw, 2.25rem) 0 4rem;
+    -webkit-text-size-adjust: 100%;
+  }
+  .app-header h1 { font-size: clamp(19px, 4vw, 26px); font-weight: 700; letter-spacing: -0.02em; }
+  .app-header p { font-size: 13px; color: var(--text-muted); }
+  .ctrl-label { font-size: 12px; color: var(--text-muted); font-weight: 600; }
+
+  /* Tarjetas / paneles (look minimalista) */
+  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); }
+  .panel-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-muted); }
+
+  /* Métricas */
+  .metric { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; height: 100%; }
   .metric-label { font-size: 11px; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px; }
-  .metric-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 5px; vertical-align: 1px; }
-  .metric-value { font-size: 20px; font-weight: 600; letter-spacing: -0.02em; }
+  .metric-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; }
+  .metric-value { font-size: 20px; font-weight: 700; letter-spacing: -0.02em; }
   .metric-sub { font-size: 11px; color: var(--text-faint); margin-top: 3px; }
-  .charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 1.5rem; }
-  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; }
-  .card.full { grid-column: 1 / -1; }
-  .card-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-muted); margin-bottom: 14px; }
+
+  /* Leyendas de gráficos */
   .legend { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 10px; }
   .legend-item { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text-muted); }
   .legend-sq { width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; }
-  table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  thead th { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-faint); padding: 8px 10px; border-bottom: 1px solid var(--border); text-align: left; }
-  tbody tr { transition: background 0.1s; }
-  tbody tr:hover { background: var(--bg); }
-  td { padding: 10px 10px; border-bottom: 1px solid var(--border); vertical-align: middle; color: var(--text); }
-  tbody tr:last-child td { border-bottom: none; }
-  .badge { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 500; padding: 3px 8px; border-radius: 4px; white-space: nowrap; }
-  .tag-total { display: inline-block; font-size: 11px; font-weight: 500; background: var(--bg); color: var(--text-muted); padding: 3px 8px; border-radius: 4px; border: 1px solid var(--border); }
-  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 200; align-items: center; justify-content: center; }
-  .modal-overlay.open { display: flex; }
-  .modal { background: var(--surface); border-radius: var(--radius); border: 1px solid var(--border); padding: 1.5rem; width: 400px; max-width: 95vw; box-shadow: 0 8px 40px rgba(0,0,0,0.12); }
-  .modal h3 { font-size: 16px; font-weight: 600; margin-bottom: 16px; }
-  .form-row { margin-bottom: 12px; }
-  .form-row label { display: block; font-size: 12px; font-weight: 500; color: var(--text-muted); margin-bottom: 5px; }
-  .form-row input, .form-row select { font-family: 'DM Sans', sans-serif; width: 100%; font-size: 13px; padding: 8px 11px; border-radius: var(--radius-sm); border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); }
-  .form-row input:focus, .form-row select:focus { outline: 2px solid var(--trans); outline-offset: 1px; }
-  .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
-  .empty { text-align: center; padding: 2rem; color: var(--text-faint); font-size: 13px; }
-  .resumen-anual { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; margin-bottom: 1.5rem; }
-  .mes-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; }
-  .mes-item { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 12px; cursor: pointer; transition: border-color 0.15s, background 0.15s; }
-  .mes-item:hover { border-color: var(--border-strong); background: var(--bg); }
-  .mes-item.activo { border-color: #7F77DD; background: #EEEDFE; }
-  .mes-item-nombre { font-size: 12px; font-weight: 500; color: var(--text-muted); margin-bottom: 4px; }
-  .mes-item-total { font-size: 14px; font-weight: 600; font-family: 'DM Mono', monospace; }
+
+  /* Chip de categoría en la tabla */
+  .chip { display: inline-flex; align-items: center; font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 999px; white-space: nowrap; }
+
+  /* Monto monoespaciado */
+  .mono { font-family: 'DM Mono', monospace; }
+
+  /* Resumen por mes */
+  .mes-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
+  .mes-item { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 10px 12px; cursor: pointer; transition: border-color 0.15s, background 0.15s; background: var(--surface); }
+  .mes-item:hover { border-color: #c8c5bc; background: var(--surface-2); }
+  .mes-item.activo { border-color: var(--accent); background: #e7f1ff; }
+  .mes-item-nombre { font-size: 12px; font-weight: 600; color: var(--text-muted); margin-bottom: 4px; }
+  .mes-item-total { font-size: 14px; font-weight: 700; font-family: 'DM Mono', monospace; }
   .mes-item-count { font-size: 10px; color: var(--text-faint); margin-top: 2px; }
-  /* ▼ Zona de carga masiva (drag & drop) */
-  .dropzone { border: 2px dashed var(--border-strong); border-radius: var(--radius); padding: 28px 18px; text-align: center; color: var(--text-muted); font-size: 13px; cursor: pointer; transition: border-color 0.15s, background 0.15s; }
-  .dropzone.drag { border-color: var(--trans); background: #EEEDFE; color: var(--text); }
-  .dropzone strong { color: var(--text); }
-  .bulk-status { font-size: 12px; margin-top: 12px; color: var(--text-muted); white-space: pre-line; max-height: 160px; overflow-y: auto; }
-  .bulk-status.error { color: #cc3333; }
-  .bulk-status.ok { color: #1D9E75; }
-  /* ▼ Aviso de configuración faltante */
-  .config-warn { background: #FAECE7; border: 1px solid #D85A30; color: #712B13; border-radius: var(--radius); padding: 14px 18px; margin-bottom: 1.5rem; font-size: 13px; line-height: 1.5; display: none; }
-  .config-warn code { font-family: 'DM Mono', monospace; background: rgba(0,0,0,0.06); padding: 1px 5px; border-radius: 4px; }
-  /* ============ RESPONSIVE ============ */
 
-  /* Tablets y pantallas medianas: la comparativa pasa a ancho completo y los gráficos se apilan si hace falta */
-  @media (max-width: 900px) {
-    .charts-grid { grid-template-columns: 1fr; }
-  }
+  /* Modal propio (renombrado .dlg para no chocar con .modal de Bootstrap) */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(20,20,20,0.45); backdrop-filter: blur(2px); z-index: 1080; align-items: center; justify-content: center; padding: 1rem; }
+  .modal-overlay.open { display: flex; }
+  .dlg { background: var(--surface); border-radius: var(--radius); border: 1px solid var(--border); padding: 1.5rem; width: 440px; max-width: 100%; box-shadow: 0 16px 48px rgba(0,0,0,0.18); }
+  .dlg h3 { font-size: 17px; font-weight: 700; margin-bottom: 16px; }
 
-  /* Tablets verticales / móviles grandes */
-  @media (max-width: 680px) {
-    header { flex-direction: column; align-items: stretch; }
-    header > div:last-child { display: grid !important; grid-template-columns: 1fr 1fr; gap: 8px; }
-    header > div:last-child .btn { justify-content: center; }
-    header > div:last-child .btn:last-child { grid-column: 1 / -1; }
-    .controls { gap: 8px; }
-    .controls select, .controls input[type="month"], .controls input[type="date"] { flex: 1 1 140px; }
-    .metric-grid { grid-template-columns: repeat(2, 1fr); }
-    /* Toques táctiles más cómodos */
-    .btn { padding: 10px 14px; }
-    .controls select, .controls input[type="month"], .controls input[type="date"] { padding: 10px 12px; }
-    .mes-grid { grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); }
-    /* Tabla más compacta */
-    thead th, td { padding: 8px 7px; }
-    table { font-size: 12px; }
-  }
+  /* Carga masiva */
+  .dropzone { border: 2px dashed #c8c5bc; border-radius: var(--radius); padding: 28px 18px; text-align: center; color: var(--text-muted); font-size: 13px; cursor: pointer; transition: border-color 0.15s, background 0.15s; }
+  .dropzone.drag { border-color: var(--accent); background: #e7f1ff; color: var(--text); }
+  .bulk-status { font-size: 12px; margin-top: 12px; color: var(--text-muted); white-space: pre-line; max-height: 170px; overflow-y: auto; }
+  .bulk-status.error { color: #dc3545; }
+  .bulk-status.ok { color: #198754; }
 
-  /* Móviles chicos */
-  @media (max-width: 420px) {
-    .metric-grid { grid-template-columns: 1fr; }
-    header > div:last-child { grid-template-columns: 1fr; }
-    header > div:last-child .btn:last-child { grid-column: auto; }
-    .modal { padding: 1.1rem; }
-    /* La columna "Mes" es redundante en pantallas muy chicas */
-    thead th:nth-child(2), td:nth-child(2) { display: none; }
-  }
-
-  /* Pantallas táctiles: agranda el área de los botones de acción de la tabla */
-  @media (hover: none) and (pointer: coarse) {
-    .btn-danger { min-width: 34px; min-height: 30px; }
-  }
-
-  /* Paginación del detalle */
-  .paginacion { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 14px; flex-wrap: wrap; }
-  .paginacion .pag-info { font-size: 12px; color: var(--text-muted); }
-  .paginacion .pag-btns { display: flex; gap: 6px; align-items: center; }
-  .pag-btn { font-family: 'DM Sans', sans-serif; font-size: 13px; padding: 6px 12px; border-radius: var(--radius-sm); border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); cursor: pointer; }
-  .pag-btn:hover:not(:disabled) { background: var(--bg); }
-  .pag-btn:disabled { opacity: 0.4; cursor: default; }
+  .config-warn { display: none; }
 
   /* Botón subir al inicio */
-  #btnTop { position: fixed; bottom: 22px; right: 22px; width: 46px; height: 46px; border-radius: 50%; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); font-size: 20px; cursor: pointer; box-shadow: 0 4px 18px rgba(0,0,0,0.14); display: none; align-items: center; justify-content: center; z-index: 150; transition: background 0.15s, transform 0.15s; }
-  #btnTop:hover { background: var(--bg); transform: translateY(-2px); }
+  #btnTop { position: fixed; bottom: 22px; right: 22px; width: 46px; height: 46px; border-radius: 50%; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 20px; cursor: pointer; box-shadow: 0 4px 18px rgba(0,0,0,0.14); display: none; align-items: center; justify-content: center; z-index: 1050; transition: background 0.15s, transform 0.15s; }
+  #btnTop:hover { background: var(--surface-2); transform: translateY(-2px); }
   #btnTop.show { display: flex; }
+
+  /* Ajustes responsivos */
+  @media (max-width: 575px) {
+    .mes-grid { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); }
+    /* La columna "Mes" es redundante en pantallas muy chicas */
+    #tablaWrap thead th:nth-child(2), #tablaWrap td:nth-child(2) { display: none; }
+  }
 </style>
 </head>
 <body>
+<div class="container-xxl">
 
-<header>
+<header class="app-header d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
   <div>
-    <h1>Panel Gastos Logísticos</h1>
-    <p>Gastos operativos y logísticos — sincronizado con Supabase</p>
+    <h1 class="mb-0">Panel Gastos Logísticos</h1>
+    <p class="mb-0">Gastos operativos y logísticos — sincronizado con Supabase</p>
   </div>
-  <div style="display:flex; gap:8px; flex-wrap:wrap;">
-    <button class="btn" onclick="abrirExport()">⬇ Exportar Excel</button>
-    <button class="btn" onclick="abrirBulk()">📥 Carga masiva</button>
-    <button class="btn btn-primary" onclick="abrirModal()">+ Agregar gasto</button>
+  <div class="d-flex flex-wrap gap-2">
+    <button class="btn btn-outline-secondary btn-sm" onclick="abrirExport()">⬇ Exportar Excel</button>
+    <button class="btn btn-outline-secondary btn-sm" onclick="abrirBulk()">📥 Carga masiva</button>
+    <button class="btn btn-dark btn-sm" onclick="abrirModal()">+ Agregar gasto</button>
   </div>
 </header>
 
-<div class="config-warn" id="configWarn">
-  ⚠️ <strong>Falta configurar Supabase.</strong> Abrí este archivo y completá las constantes
-  <code>SUPABASE_URL</code> y <code>SUPABASE_ANON_KEY</code> al principio del bloque
-  <code>&lt;script&gt;</code> (las encontrás en tu proyecto → <em>Settings → API</em>).
+<div class="config-warn alert alert-warning" id="configWarn" style="display:none;">
+  ⚠️ <strong>Falta configurar Supabase.</strong> Completá <code>SUPABASE_URL</code> y
+  <code>SUPABASE_ANON_KEY</code> al principio del bloque <code>&lt;script&gt;</code>.
 </div>
 
-<div class="controls">
-  <span class="ctrl-label">Desde</span>
-  <input type="date" id="filtroDesde">
-  <span class="ctrl-label">Hasta</span>
-  <input type="date" id="filtroHasta">
-  <select id="filtroCategoria">
+<div class="d-flex flex-wrap align-items-center gap-2 mb-4">
+  <label class="ctrl-label" for="filtroDesde">Desde</label>
+  <input type="date" id="filtroDesde" class="form-control form-control-sm" style="width:auto;">
+  <label class="ctrl-label" for="filtroHasta">Hasta</label>
+  <input type="date" id="filtroHasta" class="form-control form-control-sm" style="width:auto;">
+  <select id="filtroCategoria" class="form-select form-select-sm" style="width:auto;">
     <option value="all">Todas las categorías</option>
     <option value="flex">Envíos Flex ML</option>
     <option value="me1">ME1 Mercado Libre</option>
@@ -183,71 +136,77 @@
     <option value="reprove">Retiro Proveedores</option>
     <option value="distrib">Distribución</option>
   </select>
-  <button class="btn btn-danger" onclick="limpiarFiltros()">✕ Limpiar</button>
+  <button class="btn btn-outline-danger btn-sm" onclick="limpiarFiltros()">✕ Limpiar</button>
 </div>
 
-<div class="metric-grid" id="metricas"></div>
+<div class="row g-3 mb-4" id="metricas"></div>
 
-<div class="resumen-anual">
-  <div class="card-title">resumen por mes</div>
+<div class="panel p-3 p-md-4 mb-4">
+  <div class="panel-title mb-3">resumen por mes</div>
   <div class="mes-grid" id="mesGrid"></div>
 </div>
 
-<div class="charts-grid">
-  <div class="card">
-    <div class="card-title">distribución por categoría</div>
-    <div class="legend" id="legendDonut"></div>
-    <div style="position:relative; width:100%; height:240px;"><canvas id="donutChart"></canvas></div>
+<div class="row g-3 mb-4">
+  <div class="col-12 col-lg-6">
+    <div class="panel p-3 p-md-4 h-100">
+      <div class="panel-title mb-3">distribución por categoría</div>
+      <div class="legend" id="legendDonut"></div>
+      <div style="position:relative; width:100%; height:240px;"><canvas id="donutChart"></canvas></div>
+    </div>
   </div>
-  <div class="card">
-    <div class="card-title" id="tituloEvolucion">evolución mensual</div>
-    <div class="legend" id="legendLine"></div>
-    <div style="position:relative; width:100%; height:240px;"><canvas id="lineChart"></canvas></div>
+  <div class="col-12 col-lg-6">
+    <div class="panel p-3 p-md-4 h-100">
+      <div class="panel-title mb-3" id="tituloEvolucion">evolución mensual</div>
+      <div class="legend" id="legendLine"></div>
+      <div style="position:relative; width:100%; height:240px;"><canvas id="lineChart"></canvas></div>
+    </div>
   </div>
-  <div class="card full">
-    <div class="card-title">comparativa por categoría — período seleccionado</div>
-    <div style="position:relative; width:100%; height:180px;"><canvas id="barChart"></canvas></div>
+  <div class="col-12">
+    <div class="panel p-3 p-md-4">
+      <div class="panel-title mb-3">comparativa por categoría — período seleccionado</div>
+      <div style="position:relative; width:100%; height:180px;"><canvas id="barChart"></canvas></div>
+    </div>
   </div>
 </div>
 
-<div class="card">
-  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:8px;">
-    <div class="card-title" style="margin-bottom:0;">detalle de gastos</div>
-    <span class="tag-total" id="countLabel"></span>
+<div class="panel p-3 p-md-4" id="tablaWrap">
+  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+    <div class="panel-title mb-0">detalle de gastos</div>
+    <span class="badge text-bg-light border" id="countLabel"></span>
   </div>
-  <div style="overflow-x:auto;">
-    <table>
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0">
       <thead>
-        <tr>
+        <tr class="text-secondary small text-uppercase">
           <th style="width:12%">Fecha</th>
           <th style="width:10%">Mes</th>
           <th style="width:24%">Categoría</th>
           <th style="width:30%">Descripción</th>
-          <th style="width:16%; text-align:right">Monto</th>
-          <th style="width:8%; text-align:center">—</th>
+          <th style="width:16%" class="text-end">Monto</th>
+          <th style="width:8%" class="text-center">—</th>
         </tr>
       </thead>
       <tbody id="tablaBody"></tbody>
     </table>
   </div>
-  <div id="tablaEmpty" class="empty" style="display:none;">No hay gastos para el período seleccionado.</div>
-  <div class="paginacion" id="paginacion" style="display:none;">
-    <span class="pag-info" id="pagInfo"></span>
-    <div class="pag-btns">
-      <button class="pag-btn" id="pagPrev" onclick="cambiarPagina(-1)">‹ Anterior</button>
-      <button class="pag-btn" id="pagNext" onclick="cambiarPagina(1)">Siguiente ›</button>
+  <div id="tablaEmpty" class="text-center text-secondary py-4" style="display:none;">No hay gastos para el período seleccionado.</div>
+  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mt-3" id="paginacion" style="display:none;">
+    <span class="text-secondary small" id="pagInfo"></span>
+    <div class="btn-group">
+      <button class="btn btn-outline-secondary btn-sm" id="pagPrev" onclick="cambiarPagina(-1)">‹ Anterior</button>
+      <button class="btn btn-outline-secondary btn-sm" id="pagNext" onclick="cambiarPagina(1)">Siguiente ›</button>
     </div>
   </div>
 </div>
 
 <!-- Modal: nuevo gasto -->
 <div class="modal-overlay" id="modalOverlay">
-  <div class="modal">
+  <div class="dlg">
     <h3>Nuevo gasto</h3>
-    <div class="form-row"><label>Fecha</label><input type="date" id="fFecha"></div>
-    <div class="form-row">
-      <label>Categoría</label>
-      <select id="fCategoria">
+    <div class="mb-3"><label class="form-label" for="fFecha">Fecha</label><input type="date" id="fFecha" class="form-control"></div>
+    <div class="mb-3">
+      <label class="form-label" for="fCategoria">Categoría</label>
+      <select id="fCategoria" class="form-select">
         <option value="flex">Envíos Flex ML</option>
         <option value="me1">ME1 Mercado Libre</option>
         <option value="icbc">Tienda ICBC</option>
@@ -260,10 +219,10 @@
         <option value="distrib">Distribución</option>
       </select>
     </div>
-    <div class="form-row"><label>Descripción</label><input type="text" id="fDesc" placeholder="Ej: Flete zona norte"></div>
-    <div class="form-row"><label>Monto ($)</label><input type="number" id="fMonto" placeholder="0" min="0" step="1"></div>
-    <div class="modal-actions">
-      <button class="btn" onclick="cerrarModal()">Cancelar</button>
+    <div class="mb-3"><label class="form-label" for="fDesc">Descripción</label><input type="text" id="fDesc" class="form-control" placeholder="Ej: Flete zona norte"></div>
+    <div class="mb-3"><label class="form-label" for="fMonto">Monto ($)</label><input type="number" id="fMonto" class="form-control" placeholder="0" min="0" step="1"></div>
+    <div class="d-flex justify-content-end gap-2 mt-2">
+      <button class="btn btn-outline-secondary" onclick="cerrarModal()">Cancelar</button>
       <button class="btn btn-primary" onclick="agregarGasto()">Guardar</button>
     </div>
   </div>
@@ -271,42 +230,44 @@
 
 <!-- Modal: carga masiva CSV / Excel -->
 <div class="modal-overlay" id="modalBulk">
-  <div class="modal" style="width:460px;">
+  <div class="dlg" style="width:480px;">
     <h3>Carga masiva (CSV / Excel)</h3>
-    <div class="form-row" style="margin-bottom:14px;">
-      <label>Sector / formato del archivo</label>
-      <select id="bulkPerfil"></select>
+    <div class="mb-3">
+      <label class="form-label" for="bulkPerfil">Sector / formato del archivo</label>
+      <select id="bulkPerfil" class="form-select"></select>
     </div>
-    <p style="font-size:12px;color:var(--text-muted);margin-bottom:14px;line-height:1.5;" id="bulkAyuda"></p>
+    <p class="text-secondary small mb-3" id="bulkAyuda"></p>
     <div class="dropzone" id="dropzone">
       Arrastrá tu archivo <strong>.csv</strong>, <strong>.xlsx</strong> o <strong>.xls</strong> acá<br>o hacé clic para seleccionarlo
       <input type="file" id="csvInput" accept=".csv,text/csv,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" style="display:none;">
     </div>
     <div class="bulk-status" id="bulkStatus"></div>
-    <div class="modal-actions">
-      <button class="btn" onclick="cerrarBulk()">Cerrar</button>
+    <div class="d-flex justify-content-end gap-2 mt-2">
+      <button class="btn btn-outline-secondary" onclick="cerrarBulk()">Cerrar</button>
     </div>
   </div>
 </div>
 
 <!-- Modal: exportar a Excel -->
 <div class="modal-overlay" id="modalExport">
-  <div class="modal">
+  <div class="dlg">
     <h3>Exportar a Excel</h3>
-    <div class="form-row">
-      <label>Categoría</label>
-      <select id="expCategoria"></select>
+    <div class="mb-3">
+      <label class="form-label" for="expCategoria">Categoría</label>
+      <select id="expCategoria" class="form-select"></select>
     </div>
-    <div style="display:flex; gap:10px;">
-      <div class="form-row" style="flex:1;"><label>Desde</label><input type="date" id="expDesde"></div>
-      <div class="form-row" style="flex:1;"><label>Hasta</label><input type="date" id="expHasta"></div>
+    <div class="row g-2">
+      <div class="col-6"><label class="form-label" for="expDesde">Desde</label><input type="date" id="expDesde" class="form-control"></div>
+      <div class="col-6"><label class="form-label" for="expHasta">Hasta</label><input type="date" id="expHasta" class="form-control"></div>
     </div>
-    <div class="modal-actions">
-      <button class="btn" onclick="cerrarExport()">Cancelar</button>
+    <div class="d-flex justify-content-end gap-2 mt-3">
+      <button class="btn btn-outline-secondary" onclick="cerrarExport()">Cancelar</button>
       <button class="btn btn-primary" onclick="exportarExcel()">⬇ Exportar</button>
     </div>
   </div>
 </div>
+
+</div><!-- /.container-xxl -->
 
 <script>
 /* ============================================================
@@ -324,19 +285,19 @@ const configurado = !SUPABASE_URL.includes('TU-PROYECTO') && !SUPABASE_ANON_KEY.
 const sb = configurado ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 
 const CATEGORIAS = {
-  flex:     { label: 'Envíos Flex ML',      color: '#1D9E75', bg: '#E1F5EE', txt: '#085041' },
-  me1:      { label: 'ME1 Mercado Libre',   color: '#185FA5', bg: '#E6F1FB', txt: '#0C447C' },
-  icbc:     { label: 'Tienda ICBC',         color: '#BA7517', bg: '#FAEEDA', txt: '#633806' },
-  fravega:  { label: 'Tienda Frávega',      color: '#C2185B', bg: '#FCE4EC', txt: '#880E4F' },
-  megatone: { label: 'Tienda Megatone',     color: '#0097A7', bg: '#E0F7FA', txt: '#006064' },
-  oncity:   { label: 'Tienda OnCity',       color: '#F9A825', bg: '#FFF8E1', txt: '#855B00' },
-  trans:    { label: 'Transferencias (Spot)', color: '#7F77DD', bg: '#EEEDFE', txt: '#3C3489' },
-  corp:     { label: 'Envíos Corporativos', color: '#D85A30', bg: '#FAECE7', txt: '#712B13' },
-  reprove:  { label: 'Retiro Proveedores',  color: '#6D4C41', bg: '#EFEBE9', txt: '#3E2723' },
-  distrib:  { label: 'Distribución',        color: '#455A64', bg: '#ECEFF1', txt: '#263238' }
+  flex:     { label: 'Envíos Flex ML',      color: '#198754' },  /* success */
+  me1:      { label: 'ME1 Mercado Libre',   color: '#0d6efd' },  /* primary */
+  icbc:     { label: 'Tienda ICBC',         color: '#fd7e14' },  /* orange */
+  fravega:  { label: 'Tienda Frávega',      color: '#d63384' },  /* pink */
+  megatone: { label: 'Tienda Megatone',     color: '#0dcaf0' },  /* cyan */
+  oncity:   { label: 'Tienda OnCity',       color: '#ffc107' },  /* warning */
+  trans:    { label: 'Transferencias (Spot)', color: '#6f42c1' }, /* purple */
+  corp:     { label: 'Envíos Corporativos', color: '#dc3545' },  /* danger */
+  reprove:  { label: 'Retiro Proveedores',  color: '#20c997' },  /* teal */
+  distrib:  { label: 'Distribución',        color: '#6610f2' }   /* indigo */
 };
 // Categoría de respaldo para valores no reconocidos (evita que la app se rompa)
-const CAT_FALLBACK = { label: 'Otros', color: '#9E9B94', bg: '#EFEEEA', txt: '#3A3833' };
+const CAT_FALLBACK = { label: 'Otros', color: '#6c757d' };
 function getCat(k) { return CATEGORIAS[k] || CAT_FALLBACK; }
 
 // Mapa inverso etiqueta -> clave, para interpretar categorías escritas en el CSV
@@ -360,6 +321,13 @@ let donutChart, lineChart, barChart;
 let paginaActual = 1;            // página activa del detalle
 const POR_PAGINA = 15;          // filas por página
 let listaActual = [];           // último listado filtrado (para paginar sin recalcular)
+
+// Chart.js en tema claro
+if (window.Chart) {
+  Chart.defaults.color = '#6b6860';
+  Chart.defaults.borderColor = 'rgba(0,0,0,0.06)';
+  Chart.defaults.font.family = 'Inter, sans-serif';
+}
 
 /* ============================================================
    CAPA DE DATOS  ·  SUPABASE
@@ -423,16 +391,20 @@ function render() {
   // Métricas (muestra el gasto y, si corresponde, la cantidad de envíos por categoría)
   const activosCat = Object.keys(CATEGORIAS).filter(k => totalesCat[k] > 0 || enviosCat[k] > 0);
   document.getElementById('metricas').innerHTML = `
-    <div class="metric">
-      <div class="metric-label">Total del período</div>
-      <div class="metric-value">${fmt(totalFiltrado)}</div>
-      <div class="metric-sub">${totalEnvios>0 ? totalEnvios.toLocaleString('es-AR')+' envíos · ' : ''}${filtrados.length} registros</div>
+    <div class="col-6 col-sm-4 col-lg-3 col-xxl-2">
+      <div class="metric">
+        <div class="metric-label">Total del período</div>
+        <div class="metric-value">${fmt(totalFiltrado)}</div>
+        <div class="metric-sub">${totalEnvios>0 ? totalEnvios.toLocaleString('es-AR')+' envíos · ' : ''}${filtrados.length} registros</div>
+      </div>
     </div>
     ${activosCat.map(k => `
-    <div class="metric">
-      <div class="metric-label"><span class="metric-dot" style="background:${getCat(k).color}"></span>${getCat(k).label}</div>
-      <div class="metric-value" style="font-size:17px;">${fmt(totalesCat[k])}</div>
-      <div class="metric-sub">${totalFiltrado>0?Math.round(totalesCat[k]/totalFiltrado*100):0}% del total${enviosCat[k]>0 ? ' · '+enviosCat[k].toLocaleString('es-AR')+' envíos' : ''}</div>
+    <div class="col-6 col-sm-4 col-lg-3 col-xxl-2">
+      <div class="metric">
+        <div class="metric-label"><span class="metric-dot" style="background:${getCat(k).color}"></span>${getCat(k).label}</div>
+        <div class="metric-value" style="font-size:17px;">${fmt(totalesCat[k])}</div>
+        <div class="metric-sub">${totalFiltrado>0?Math.round(totalesCat[k]/totalFiltrado*100):0}% del total${enviosCat[k]>0 ? ' · '+enviosCat[k].toLocaleString('es-AR')+' envíos' : ''}</div>
+      </div>
     </div>`).join('')}
   `;
 
@@ -489,7 +461,7 @@ function renderDonut(totales) {
   if (donutChart) donutChart.destroy();
   donutChart = new Chart(document.getElementById('donutChart'), {
     type: 'doughnut',
-    data: { labels: cats.map(k=>getCat(k).label), datasets: [{ data: cats.map(k=>totales[k]), backgroundColor: cats.map(k=>getCat(k).color), borderWidth: 3, borderColor: '#fff' }] },
+    data: { labels: cats.map(k=>getCat(k).label), datasets: [{ data: cats.map(k=>totales[k]), backgroundColor: cats.map(k=>getCat(k).color), borderWidth: 3, borderColor: '#ffffff' }] },
     options: { responsive:true, maintainAspectRatio:false, cutout:'68%', plugins: { legend:{display:false}, tooltip:{callbacks:{label:ctx=>` ${fmt(ctx.raw)} (${Math.round(ctx.raw/ctx.dataset.data.reduce((a,b)=>a+b,0)*100)}%)`}}}}
   });
 }
@@ -565,12 +537,12 @@ function renderTabla(lista) {
   document.getElementById('tablaBody').innerHTML = pageRows.map(g => {
     const [anio, gm] = g.fecha.split('-');
     return `<tr>
-      <td style="font-family:'DM Mono',monospace;font-size:12px;color:var(--text-muted)">${g.fecha}</td>
-      <td><span style="font-size:11px;color:var(--text-muted)">${MESES_NOMBRE[parseInt(gm)-1].substring(0,3)} ${anio}</span></td>
-      <td><span class="badge" style="background:${getCat(g.cat).bg};color:${getCat(g.cat).txt}">${getCat(g.cat).label}</span></td>
-      <td style="color:var(--text-muted)">${g.desc}</td>
-      <td style="text-align:right;font-weight:600;font-family:'DM Mono',monospace;font-size:13px;">${fmt(g.monto)}</td>
-      <td style="text-align:center;"><button class="btn btn-danger" style="padding:3px 8px;font-size:11px;" onclick="eliminarGasto(${g.id})">✕</button></td>
+      <td class="mono small text-secondary">${g.fecha}</td>
+      <td class="small text-secondary">${MESES_NOMBRE[parseInt(gm)-1].substring(0,3)} ${anio}</td>
+      <td><span class="chip" style="background:${getCat(g.cat).color}22;color:${getCat(g.cat).color}">${getCat(g.cat).label}</span></td>
+      <td class="text-secondary">${g.desc}</td>
+      <td class="text-end fw-semibold mono">${fmt(g.monto)}</td>
+      <td class="text-center"><button class="btn btn-sm btn-outline-danger py-0 px-2" onclick="eliminarGasto(${g.id})">✕</button></td>
     </tr>`;
   }).join('');
 

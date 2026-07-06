@@ -12,3 +12,6 @@ Thumbs.db
 *.xls
 *.csv
 _*.py
+
+# Config local de preview
+.claude/
