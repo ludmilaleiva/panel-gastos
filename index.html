@@ -126,6 +126,8 @@
   <select id="filtroCategoria" class="form-select form-select-sm" style="width:auto;">
     <option value="all">Todas las categorías</option>
     <option value="flex">Envíos Flex ML</option>
+    <option value="ml1">Flex ML1</option>
+    <option value="ml2">Flex ML2</option>
     <option value="me1">ME1 Mercado Libre</option>
     <option value="icbc">Tienda ICBC</option>
     <option value="fravega">Tienda Frávega</option>
@@ -208,6 +210,8 @@
       <label class="form-label" for="fCategoria">Categoría</label>
       <select id="fCategoria" class="form-select">
         <option value="flex">Envíos Flex ML</option>
+        <option value="ml1">Flex ML1</option>
+        <option value="ml2">Flex ML2</option>
         <option value="me1">ME1 Mercado Libre</option>
         <option value="icbc">Tienda ICBC</option>
         <option value="fravega">Tienda Frávega</option>
@@ -294,7 +298,9 @@ const CATEGORIAS = {
   trans:    { label: 'Transferencias (Spot)', color: '#6f42c1' }, /* purple */
   corp:     { label: 'Envíos Corporativos', color: '#dc3545' },  /* danger */
   reprove:  { label: 'Retiro Proveedores',  color: '#20c997' },  /* teal */
-  distrib:  { label: 'Distribución',        color: '#6610f2' }   /* indigo */
+  distrib:  { label: 'Distribución',        color: '#6610f2' },  /* indigo */
+  ml1:      { label: 'Flex ML1',            color: '#4263eb' },  /* cuenta ML 1 */
+  ml2:      { label: 'Flex ML2',            color: '#e8590c' }   /* cuenta ML 2 */
 };
 // Categoría de respaldo para valores no reconocidos (evita que la app se rompa)
 const CAT_FALLBACK = { label: 'Otros', color: '#6c757d' };
@@ -705,8 +711,24 @@ const PERFILES = {
       'distribucion': { categoria: 'distrib', colFecha: ['FECHA DE RECEP'], colMonto: ['VALOR'],    colRef: ['NRO DOCUMENTO'] }
     },
     ayuda: 'Archivo de distribución con varias hojas. Cada hoja va a su categoría: <strong>CORP</strong>→Corporativos, <strong>RE PROVE</strong>→Retiro Proveedores, <strong>Spot</strong>→Transferencias, <strong>Distribucion</strong>→Distribución. Se ignoran las filas de total/subtotal y se suma cada remito; los remitos ya cargados no se duplican.'
+  },
+  detalle_ml: {
+    nombre: 'Detalle Flex ML (separa ML1 / ML2 por cuenta)',
+    multiCategoria: true,
+    colCategoria: ['Cuenta ML'],          // separa por cuenta de Mercado Libre
+    mapCategoria: { '2464622014': 'ml2' }, // esa cuenta → ML2
+    catDefault: 'ml1',                     // cualquier otra cuenta → ML1
+    colFecha: ['Fecha'],
+    colMonto: ['Costo Envio'],
+    colRef: ['Int. ID'],                   // identificador único por envío (anti-duplicados)
+    colEstado: ['Estado'],
+    estadosIncluidos: ['entregado'],       // solo entregados
+    permitirMontoCero: true,
+    agrupar: 'dia',
+    dedup: true,
+    ayuda: 'Export "Detalle" de Flex. Identifica cada envío por <strong>Int. ID</strong> (anti-duplicados), separa por <strong>Cuenta ML</strong> (cuenta 2464622014 → ML2, el resto → ML1), usa <strong>Fecha</strong> y suma <strong>Costo Envio</strong>. Ojo: es el mismo dato que el reporte AMBA Flex — no cargues ambas fuentes para el mismo mes.'
   }
-  // ➕ Próximos sectores se agregan acá (ME1...)
+  // ➕ Próximos sectores se agregan acá
 };
 
 // Normaliza texto para comparar encabezados (minúsculas, sin acentos ni espacios extra)
@@ -820,6 +842,7 @@ function detectarPerfil(rows) {
   for (const k in PERFILES) {
     const p = PERFILES[k];
     if (p.posicional) continue;                 // el genérico no se autodetecta
+    if (p.multiHoja) continue;                  // los multi-hoja se detectan por nombre de hoja
     if (buscarCol(header, p.colFecha) < 0) continue;
     if (buscarCol(header, p.colMonto) < 0) continue;
     if (p.colRef && buscarCol(header, p.colRef) < 0) continue;
@@ -1013,7 +1036,7 @@ function resolverCategoria(perfil, valor) {
   const v = norm(valor);
   if (perfil.mapCategoria[v]) return perfil.mapCategoria[v];
   for (const k in perfil.mapCategoria) { if (v.includes(k) || k.includes(v)) return perfil.mapCategoria[k]; }
-  return null;
+  return perfil.catDefault || null;   // categoría por defecto si no coincide
 }
 
 // Carga con anti-duplicados: guarda cada envío por ID y regenera los totales diarios por categoría
